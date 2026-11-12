@@ -8,7 +8,7 @@ if security find-certificate -c "$NAME" "$KEYCHAIN" >/dev/null 2>&1; then
     IDENTITIES=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/"WindowSketch Local Signing"$/ { print $2 }')
     set -- $IDENTITIES
     if [ "$#" -eq 1 ]; then
-        printf '%s\n' '기존 윈도우스케치 서명 인증서를 유지합니다.'
+        printf '%s\n' '기존 SketchFrame 서명 인증서를 유지합니다.'
         exit 0
     fi
     printf '%s\n' '같은 이름의 인증서가 있지만 유효한 서명 인증서를 하나로 확인할 수 없습니다. 키체인에서 확인해 주세요.' >&2

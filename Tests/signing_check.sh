@@ -10,8 +10,8 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/windowsketch-signing-check.XXXXXX")
 trap 'rm -rf "$WORK"' 0
 FIRST="$WORK/first.app"
 SECOND="$WORK/second.app"
-ditto 'build/윈도우스케치.app' "$FIRST"
-ditto 'build/윈도우스케치.app' "$SECOND"
+ditto 'build/SketchFrame.app' "$FIRST"
+ditto 'build/SketchFrame.app' "$SECOND"
 mkdir "$WORK/Source"
 cp Source/*.swift "$WORK/Source/"
 printf '\nprint("서명 검증용 두 번째 빌드입니다.")\n' >> "$WORK/Source/main.swift"

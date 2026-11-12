@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>personal.windowsketch</string>
-<key>CFBundleName</key><string>윈도우스케치</string>
-<key>CFBundleDisplayName</key><string>윈도우스케치</string>
+<key>CFBundleName</key><string>SketchFrame</string>
+<key>CFBundleDisplayName</key><string>SketchFrame</string>
 <key>CFBundleExecutable</key><string>WindowSketch</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>

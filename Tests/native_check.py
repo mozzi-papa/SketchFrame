@@ -40,6 +40,7 @@ number_value = bind(cf, 'CFNumberGetValue', [P, c.c_int, P], c.c_bool)
 create_app = bind(ax, 'AXUIElementCreateApplication', [c.c_int], P)
 copy_attribute = bind(ax, 'AXUIElementCopyAttributeValue', [P, P, c.POINTER(P)], c.c_int)
 set_timeout = bind(ax, 'AXUIElementSetMessagingTimeout', [P, c.c_float], c.c_int)
+perform_action = bind(ax, 'AXUIElementPerformAction', [P, P], c.c_int)
 ax_value = bind(ax, 'AXValueGetValue', [P, c.c_int, P], c.c_bool)
 create_event = bind(cg, 'CGEventCreate', [P], P)
 event_location = bind(cg, 'CGEventGetLocation', [P], Point)
@@ -103,6 +104,29 @@ def frame(pid):
     result = element_frame(window) if window else None
     if window:
         release(window)
+    release(app)
+    return result
+
+
+def fixture_windows(pid, raise_title=None):
+    app = create_app(pid)
+    set_timeout(app, 0.5)
+    windows = get(app, 'AXWindows')
+    result = {}
+    if windows:
+        for i in range(array_count(windows)):
+            window = array_item(windows, i)
+            title_value = get(window, 'AXTitle')
+            title = text(title_value) if title_value else ''
+            if title_value:
+                release(title_value)
+            result[title] = element_frame(window)
+            if title == raise_title:
+                action = string(None, b'AXRaise', 0x08000100)
+                error = perform_action(window, action)
+                release(action)
+                assert error == 0, ('검증용 창 전환 실패', error)
+        release(windows)
     release(app)
     return result
 
@@ -215,10 +239,10 @@ def hold_drag(start, end, target_pid):
     mouse(5, start)
     mouse(1, start, MODIFIERS)
     time.sleep(0.06)
-    for i in range(1, 13):
+    for i in range(1, 7):
         if frontmost_pid() != target_pid:
             raise RuntimeError('활성 앱이 바뀌어 검증 입력을 중단했습니다.')
-        mouse(6, Point(start.x + (end.x - start.x) * i / 12, start.y + (end.y - start.y) * i / 12), MODIFIERS)
+        mouse(6, Point(start.x + (end.x - start.x) * i / 6, start.y + (end.y - start.y) * i / 6), MODIFIERS)
         time.sleep(0.015)
 
 
@@ -297,7 +321,8 @@ def run(candidate_path, fixture_path):
             assert same_frame(info['frame'], expected), (info, expected)
             assert '자유 그리기' in info['value'], info
             mouse(2, last_point)
-            wait_for(lambda: '배치 완료' in status(candidate.pid), '그린 크기로 배치되지 않았습니다.')
+            wait_for(lambda: same_frame(frame(fixture.pid), expected) and '배치 완료' in status(candidate.pid),
+                     '그린 크기와 위치로 배치되지 않았습니다.')
             assert same_frame(frame(fixture.pid), expected), (frame(fixture.pid), expected)
             anchor_checks.append({'reverseX': reverse_x, 'reverseY': reverse_y,
                                   'preview': info['frame'], 'actual': frame(fixture.pid)})
@@ -315,6 +340,17 @@ def run(candidate_path, fixture_path):
         assert same_frame(edge_result['frame'], frame(fixture.pid)), (edge_result, frame(fixture.pid))
         assert not same_frame(frame(fixture.pid), before), '가장자리 이동이 이전 배치로 복원됐습니다.'
         wait_for(lambda: not visible_overlay(candidate.pid), '실패 안내가 자동으로 닫히지 않았습니다.')
+        before_switch = fixture_windows(fixture.pid)
+        assert len(before_switch) == 2, before_switch
+        start = Point(bounds.origin.x + 60, bounds.origin.y + 60)
+        last_point = Point(start.x + 850, start.y + 400)
+        hold_drag(start, last_point, fixture.pid)
+        wait_for(lambda: visible_overlay(candidate.pid), '창 전환 검사에서 미리보기가 없습니다.')
+        fixture_windows(fixture.pid, raise_title='윈도우스케치 보조 검증 창')
+        wait_for(lambda: '대상 창이 바뀌어' in status(candidate.pid), '대상 창 전환 후 선택이 취소되지 않았습니다.')
+        mouse(2, last_point)
+        wait_for(lambda: not visible_overlay(candidate.pid), '창 전환 취소 후 미리보기가 남았습니다.')
+        assert fixture_windows(fixture.pid) == before_switch, '창 전환 취소가 다른 창의 배치를 변경했습니다.'
         result = status(candidate.pid)
         assert '시간 초과 0' in result, result
         maximum = re.search(r'입력 최대 ([\d.]+) ms', result)
@@ -322,7 +358,8 @@ def run(candidate_path, fixture_path):
         print(json.dumps({'result': 'PASS', 'checks': ['첫 드래그 표시', '작은 영역 좌표 보존',
                 '미확인 크기 안내', '크기 제한 경고', '요청·실제 크기 안내', '이동 결과 유지', '이전 거부 크기 드래그 중 경고',
                 '크기 자동 보정 없음', '오류 타이머와 새 드래그 분리',
-                'Esc 취소', '네 방향 자유 그리기와 실제 배치 일치', '가장자리 보정 없음', '오류 안내 자동 닫기', '입력 시간 초과 없음'],
+                'Esc 취소', '네 방향 자유 그리기와 실제 배치 일치', '가장자리 보정 없음', '오류 안내 자동 닫기',
+                '같은 앱의 다른 창 전환 시 취소', '취소 후 두 창 배치 유지', '입력 시간 초과 없음'],
                 'initialPreview': initial_info, 'outcome': outcome, 'anchorChecks': anchor_checks,
                 'diagnostics': result}, ensure_ascii=False, indent=2))
     except Exception:

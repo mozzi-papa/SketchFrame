@@ -2,6 +2,7 @@ import AppKit
 
 final class FixtureDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
+    var secondary: NSWindow!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: CGRect(x: 140, y: 180, width: 900, height: 480),
@@ -13,6 +14,12 @@ final class FixtureDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let label = NSTextField(labelWithString: "자유 그리기·크기 지원 안내·취소·복원 검증용 창입니다.")
         label.frame = CGRect(x: 24, y: 120, width: 650, height: 30)
         window.contentView?.addSubview(label)
+        secondary = NSWindow(contentRect: CGRect(x: 320, y: 220, width: 820, height: 400),
+                             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        secondary.title = "윈도우스케치 보조 검증 창"
+        secondary.minSize = window.minSize
+        secondary.isReleasedWhenClosed = false
+        secondary.makeKeyAndOrderFront(nil)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

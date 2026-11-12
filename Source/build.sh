@@ -11,7 +11,7 @@ fi
 SIGNING_IDENTITY="$1"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/windowsketch-build.XXXXXX")
 trap 'rm -rf "$WORK"' 0
-APP="$WORK/윈도우스케치.app"
+APP="$WORK/SketchFrame.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Source/Info.plist "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
@@ -21,15 +21,19 @@ xcrun swiftc -swift-version 5 Source/*.swift -o "$APP/Contents/MacOS/WindowSketc
 codesign --force --sign "$SIGNING_IDENTITY" --keychain "$KEYCHAIN" --timestamp=none --identifier personal.windowsketch "$APP"
 codesign --verify --deep --strict "$APP"
 "$APP/Contents/MacOS/WindowSketch" --self-test
-DEST="build/윈도우스케치.app"
-if [ -e "$DEST" ]; then
-    RUNNING=$(pgrep -f "$PWD/$DEST/Contents/MacOS/WindowSketch" || true)
+DEST="build/SketchFrame.app"
+LEGACY="build/윈도우스케치.app"
+for EXISTING in "$DEST" "$LEGACY"; do
+if [ -e "$EXISTING" ]; then
+    RUNNING=$(pgrep -f "$PWD/$EXISTING/Contents/MacOS/WindowSketch" || true)
     if [ -n "$RUNNING" ]; then
-        printf '%s\n' '실행 중인 윈도우스케치를 메뉴에서 종료한 뒤 다시 빌드해 주세요.' >&2
+        printf '%s\n' '실행 중인 SketchFrame을 메뉴에서 종료한 뒤 다시 빌드해 주세요.' >&2
         exit 1
     fi
 fi
+done
 mkdir -p build
+if [ -d "$LEGACY" ] && [ ! -e "$DEST" ]; then mv "$LEGACY" "$DEST"; fi
 ditto "$APP" "$DEST"
 codesign --verify --deep --strict "$DEST"
 # 최종 경로를 등록해 Finder가 실행 파일 위치를 정확히 읽도록 합니다.
