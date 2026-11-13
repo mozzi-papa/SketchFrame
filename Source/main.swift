@@ -64,7 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ = NSWorkspace.shared.frontmostApplication
         if let screen = NSScreen.screens.first { overlay.prepare(on: screen) }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        let image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "SketchFrame")
+        let image = NSImage(named: NSImage.Name("StatusBarIconTemplate")) ?? NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "SketchFrame")
+        image?.size = NSSize(width: 18, height: 18)
         image?.isTemplate = true
         statusItem.button?.image = image
         statusItem.button?.setAccessibilityLabel("SketchFrame")

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+  <!-- 시안 D: 정밀 바운딩 박스 (Precision Bounding Box) -->
+  <!-- 바운딩 박스 외곽 프레임 -->
+  <rect x="3.5" y="3.5" width="13" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+  <!-- 타이틀 바 구분선 -->
+  <line x1="3.5" y1="7" x2="16.5" y2="7" stroke="currentColor" stroke-width="1.0"/>
+  <!-- 4개 코너 정밀 조준 사각 노브 -->
+  <rect x="2" y="2" width="3" height="3" rx="0.5" fill="currentColor"/>
+  <rect x="15" y="2" width="3" height="3" rx="0.5" fill="currentColor"/>
+  <rect x="15" y="15" width="3" height="3" rx="0.5" fill="currentColor"/>
+  <rect x="2" y="15" width="3" height="3" rx="0.5" fill="currentColor"/>
+  <!-- 정밀 십자 조준선 (Center Crosshair) -->
+  <line x1="8.5" y1="11.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="10" y1="10" x2="10" y2="13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

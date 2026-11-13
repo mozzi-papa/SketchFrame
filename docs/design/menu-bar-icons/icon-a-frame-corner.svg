@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+  <!-- 시안 A: 프레임 코너 (Frame Corners) -->
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 좌상단 코너 가이드 -->
+    <path d="M 2.5 6.5 V 4 C 2.5 3.17 3.17 2.5 4 2.5 H 6.5" stroke-width="1.5"/>
+    <!-- 우상단 코너 가이드 -->
+    <path d="M 13.5 2.5 H 16 C 16.83 2.5 17.5 3.17 17.5 4 V 6.5" stroke-width="1.5"/>
+    <!-- 우하단 코너 가이드 -->
+    <path d="M 17.5 13.5 V 16 C 17.5 16.83 16.83 17.5 16 17.5 H 13.5" stroke-width="1.5"/>
+    <!-- 좌하단 코너 가이드 -->
+    <path d="M 6.5 17.5 H 4 C 3.17 17.5 2.5 16.83 2.5 16 V 13.5" stroke-width="1.5"/>
+    <!-- 내부 윈도우 프레임 -->
+    <rect x="5.8" y="5.8" width="8.4" height="8.4" rx="1.2" stroke-width="1.2"/>
+    <line x1="5.8" y1="8.5" x2="14.2" y2="8.5" stroke-width="1.0"/>
+  </g>
+</svg>

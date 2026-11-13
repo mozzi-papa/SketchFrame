@@ -15,6 +15,9 @@ APP="$WORK/SketchFrame.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Source/Info.plist "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
+if [ -d Source/Resources ]; then
+    cp -R Source/Resources/. "$APP/Contents/Resources/"
+fi
 xcrun swiftc -swift-version 5 Source/*.swift -o "$APP/Contents/MacOS/WindowSketch" \
     -target arm64-apple-macos13.0 -framework AppKit -framework ApplicationServices \
     -module-cache-path "$WORK/swift-cache" -O
