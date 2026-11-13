@@ -16,18 +16,29 @@
 
 ## 설치
 
-**지원 환경:** Apple Silicon Mac, macOS 13 이상. 배포 ZIP을 사용하면 Xcode나 Node.js를 설치할 필요가 없습니다.
+**지원 환경:** Apple Silicon Mac, macOS 13 이상. Xcode나 Node.js는 필요하지 않습니다.
 
-1. 위 **Mac용 다운로드 · ZIP**과 **SHA-256 체크섬**을 내려받습니다. 아래 안내로 체크섬을 확인할 수 있습니다.
-2. ZIP의 압축을 풀고 `SketchFrame.app`을 Finder의 **응용 프로그램** 폴더(`/Applications`)로 옮깁니다.
-3. 응용 프로그램 폴더에서 `SketchFrame.app`을 실행합니다. 메뉴 막대에 스케치 모양 아이콘이 나타납니다.
-4. 메뉴 막대 아이콘 → **손쉬운 사용 권한 허용…**을 선택합니다.
-5. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 **SketchFrame**을 허용합니다.
-6. 메뉴 상태가 **켜짐**인지 확인합니다. Rectangle을 사용 중이면 종료하거나 겹치는 단축키를 변경해 주세요.
+### Homebrew로 설치
+
+[Homebrew](https://brew.sh/)가 설치되어 있다면 터미널에서 다음 한 줄을 실행합니다.
+
+```sh
+brew install --cask mozzi-papa/tap/sketchframe
+```
+
+ZIP 다운로드·체크섬 검증·응용 프로그램 폴더 설치를 자동으로 처리합니다. 설치 후 **응용 프로그램 → SketchFrame**을 실행합니다.
+
+### 처음 실행할 때
+
+1. 메뉴 막대의 스케치 모양 아이콘 → **손쉬운 사용 권한 허용…**을 선택합니다.
+2. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 **SketchFrame**을 허용합니다.
+3. 메뉴 상태가 **켜짐**인지 확인합니다. Rectangle을 사용 중이면 종료하거나 겹치는 단축키를 변경해 주세요.
 
 **현재 배포본은 로컬 인증서로 서명했으며 Apple Developer ID 서명·공증을 포함하지 않습니다. 다른 Mac에서는 실행이 차단될 수 있습니다.**
 
-현재는 GitHub Releases의 ZIP으로 설치합니다. Homebrew와 npm/npx 설치는 제공하지 않습니다.
+### ZIP으로 직접 설치
+
+Homebrew 없이 설치하려면 위 **Mac용 다운로드 · ZIP**과 **SHA-256 체크섬**을 내려받습니다. 체크섬 확인 후 ZIP의 압축을 풀고 `SketchFrame.app`을 Finder의 **응용 프로그램** 폴더(`/Applications`)로 옮겨 실행합니다. 권한 허용은 위와 같습니다.
 
 <details>
 <summary>다운로드 파일의 SHA-256 확인</summary>
@@ -93,6 +104,21 @@ Rectangle과 기본키가 겹치므로 동시에 사용하려면 한쪽 키를 �
 
 기존 사용자는 **업데이트 확인… → 새 버전으로 업데이트…**에서 설치를 진행할 수 있습니다. 다운로드한 앱의 체크섬과 서명을 검증하고 기존 앱을 교체한 뒤 다시 실행합니다. 단축키 설정은 유지합니다. 업데이트하려면 앱이 설치된 폴더에 쓰기 권한이 필요합니다.
 
+### Homebrew로 업데이트·제거
+
+```sh
+brew update
+brew upgrade --cask --greedy mozzi-papa/tap/sketchframe
+```
+
+앱 자체 업데이트 기능이 있는 패키지이므로 Homebrew 업데이트에는 `--greedy`를 사용합니다.
+
+```sh
+brew uninstall --cask mozzi-papa/tap/sketchframe
+```
+
+제거해도 단축키 설정은 자동 삭제하지 않습니다.
+
 ## 권한과 지원 범위
 
 - **손쉬운 사용 권한**은 활성 창의 이동·크기 조절과 전역 단축키 처리에 사용합니다. 화면 기록 권한은 사용하지 않습니다.
@@ -156,6 +182,8 @@ Rectangle과 기본키가 겹치므로 동시에 사용하려면 한쪽 키를 �
 ```sh
 sh Source/package-release.sh
 ```
+
+새 버전 배포 시 [Homebrew tap](https://github.com/mozzi-papa/homebrew-tap)의 `Casks/sketchframe.rb`에 버전과 ZIP의 SHA-256도 갱신해야 합니다.
 
 GitHub 릴리스 게시는 별도 작업입니다. 게시된 정식 릴리스가 없으면 **게시된 정식 업데이트가 없습니다.**라고 안내합니다. 현재 맥의 로컬 서명이며 외부 배포용 Apple Developer ID 서명·공증은 포함하지 않습니다.
 
