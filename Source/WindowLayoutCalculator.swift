@@ -54,10 +54,17 @@ enum WindowLayoutCalculator {
         switch action {
         case .drawRegion:
             throw WindowFailure(message: "자유 영역은 드래그로 지정해 주세요.")
-        case .leftHalf:
-            result = CGRect(x: area.minX, y: area.minY, width: splitX - area.minX, height: area.height)
-        case .rightHalf:
-            result = CGRect(x: splitX, y: area.minY, width: area.maxX - splitX, height: area.height)
+        case .leftHalf, .rightHalf:
+            let right = action == .rightHalf
+            result = horizontalHalf(of: current, right: right)
+            // macOS의 픽셀 반올림 차이만 허용해 반복 배치를 판별합니다.
+            let differences = [window.minX - result.minX, window.minY - result.minY,
+                               window.width - result.width, window.height - result.height]
+            if differences.allSatisfy({ abs($0) * current.scale <= 4 }),
+               let adjacent = horizontalNeighbor(of: current, right: right, screens: available) {
+                destination = adjacent
+                result = horizontalHalf(of: adjacent, right: !right)
+            }
         case .topHalf:
             result = CGRect(x: area.minX, y: area.minY, width: area.width, height: splitY - area.minY)
         case .bottomHalf:
@@ -143,6 +150,30 @@ enum WindowLayoutCalculator {
             throw WindowFailure(message: "배치할 창의 크기가 올바르지 않습니다.")
         }
         return WindowLayoutPlan(rectangle: result, screen: destination)
+    }
+
+    private static func horizontalHalf(of screen: ScreenRegion, right: Bool) -> CGRect {
+        let area = screen.workArea
+        let split = area.minX + floor(area.width * screen.scale / 2) / screen.scale
+        return CGRect(x: right ? split : area.minX, y: area.minY,
+                      width: right ? area.maxX - split : split - area.minX, height: area.height)
+    }
+
+    private static func horizontalNeighbor(of current: ScreenRegion, right: Bool,
+                                           screens: [ScreenRegion]) -> ScreenRegion? {
+        let frame = current.frame
+        return screens.filter { candidate in
+            candidate.id != current.id &&
+                min(frame.maxY, candidate.frame.maxY) > max(frame.minY, candidate.frame.minY) &&
+                (right ? candidate.frame.minX >= frame.maxX : candidate.frame.maxX <= frame.minX)
+        }.min { left, rightCandidate in
+            let leftGap = right ? left.frame.minX - frame.maxX : frame.minX - left.frame.maxX
+            let rightGap = right ? rightCandidate.frame.minX - frame.maxX : frame.minX - rightCandidate.frame.maxX
+            if leftGap != rightGap { return leftGap < rightGap }
+            let leftOffset = abs(left.frame.midY - frame.midY)
+            let rightOffset = abs(rightCandidate.frame.midY - frame.midY)
+            return leftOffset == rightOffset ? left.id < rightCandidate.id : leftOffset < rightOffset
+        }
     }
 
     private static func fit(_ rectangle: CGRect, in area: CGRect) -> CGRect {

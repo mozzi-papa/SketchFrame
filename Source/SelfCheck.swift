@@ -231,6 +231,53 @@ enum SelfCheck {
         let rightPlan = try! WindowLayoutCalculator.plan(action: .rightHalf, window: current, screens: [primaryRegion])
         check(leftPlan.rectangle.maxX == rightPlan.rectangle.minX && leftPlan.rectangle.union(rightPlan.rectangle) == primaryRegion.workArea,
               "홀수 픽셀 화면 반쪽 분할에 틈 없음")
+        let rightRegion = ScreenRegion(id: 4, frame: CGRect(x: 1001.5, y: 200, width: 1201, height: 900),
+                                       workArea: CGRect(x: 1001.5, y: 224, width: 1171, height: 876), scale: 1)
+        let horizontalScreens = [rightRegion, topRegion, primaryRegion, leftRegion]
+        let rightScreenLeft = try! WindowLayoutCalculator.plan(action: .leftHalf, window: rightRegion.workArea, screens: [rightRegion])
+        let rightScreenRight = try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightRegion.workArea, screens: [rightRegion])
+        let hopRight = try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle, screens: horizontalScreens)
+        check(hopRight.screen.id == rightRegion.id && hopRight.rectangle == rightScreenLeft.rectangle,
+              "오른쪽 절반 반복은 높이·배율이 다른 오른쪽 화면의 왼쪽 절반으로")
+        let continueRight = try! WindowLayoutCalculator.plan(action: .rightHalf, window: hopRight.rectangle, screens: horizontalScreens)
+        check(continueRight.rectangle == rightScreenRight.rectangle && continueRight.screen.id == rightRegion.id,
+              "옆 화면 왼쪽 절반에서 다시 누르면 같은 화면 오른쪽 절반으로")
+        let stayRight = try! WindowLayoutCalculator.plan(action: .rightHalf, window: continueRight.rectangle, screens: horizontalScreens)
+        check(stayRight.rectangle == continueRight.rectangle && stayRight.screen.id == rightRegion.id,
+              "마지막 오른쪽 화면에서는 순환 없이 유지")
+        let hopBack = try! WindowLayoutCalculator.plan(action: .leftHalf, window: hopRight.rectangle, screens: horizontalScreens)
+        check(hopBack.screen.id == primaryRegion.id && hopBack.rectangle == rightPlan.rectangle,
+              "왼쪽 절반 반복은 왼쪽 화면의 오른쪽 절반으로")
+        let leftScreenRight = try! WindowLayoutCalculator.plan(action: .rightHalf, window: leftRegion.workArea, screens: [leftRegion])
+        let hopLeft = try! WindowLayoutCalculator.plan(action: .leftHalf, window: leftPlan.rectangle, screens: horizontalScreens)
+        check(hopLeft.screen.id == leftRegion.id && hopLeft.rectangle == leftScreenRight.rectangle,
+              "음수 좌표의 왼쪽 화면으로 이동")
+        let continueLeft = try! WindowLayoutCalculator.plan(action: .leftHalf, window: hopLeft.rectangle, screens: horizontalScreens)
+        let stayLeft = try! WindowLayoutCalculator.plan(action: .leftHalf, window: continueLeft.rectangle, screens: horizontalScreens)
+        check(stayLeft.rectangle == continueLeft.rectangle && stayLeft.screen.id == leftRegion.id,
+              "마지막 왼쪽 화면에서는 순환 없이 유지")
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: current, screens: horizontalScreens).rectangle == rightPlan.rectangle,
+              "반쪽에 있지 않은 창은 먼저 현재 화면에 배치")
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle, screens: [primaryRegion, topRegion]).screen.id == primaryRegion.id,
+              "위아래로만 배치된 화면으로 좌우 이동하지 않음")
+        check(try! WindowLayoutCalculator.plan(action: .leftHalf, window: leftPlan.rectangle, screens: [primaryRegion]).rectangle == leftPlan.rectangle,
+              "단일 화면에서 같은 절반 반복 유지")
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle.offsetBy(dx: 1, dy: -1),
+                                              screens: horizontalScreens).screen.id == rightRegion.id,
+              "2배 화면의 작은 픽셀 반올림 차이 허용")
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle.offsetBy(dx: 3, dy: 0),
+                                              screens: horizontalScreens).screen.id == primaryRegion.id,
+              "반올림 범위 밖의 수동 이동은 현재 화면에 다시 배치")
+        let farRight = ScreenRegion(id: 5, frame: rightRegion.frame.offsetBy(dx: 1500, dy: 0),
+                                    workArea: rightRegion.workArea.offsetBy(dx: 1500, dy: 0), scale: 1)
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle,
+                                              screens: [farRight, primaryRegion, rightRegion]).screen.id == rightRegion.id,
+              "화면 목록 순서와 무관하게 가까운 옆 화면 선택")
+        let diagonal = ScreenRegion(id: 6, frame: CGRect(x: 1001.5, y: 800, width: 1000, height: 800),
+                                    workArea: CGRect(x: 1001.5, y: 824, width: 1000, height: 776), scale: 1)
+        check(try! WindowLayoutCalculator.plan(action: .rightHalf, window: rightPlan.rectangle,
+                                              screens: [primaryRegion, diagonal]).screen.id == primaryRegion.id,
+              "모서리만 닿는 대각선 화면은 좌우 이동에서 제외")
         for action in WindowAction.leftColumn + WindowAction.rightColumn where ![.restore, .nextDisplay, .previousDisplay].contains(action) {
             let plan = try? WindowLayoutCalculator.plan(action: action, window: current, screens: [primaryRegion])
             check(plan.map { SelectionGeometry.isValid($0.rectangle) } == true, "배치 계산: \(action.title)")
