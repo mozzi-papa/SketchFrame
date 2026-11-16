@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>SketchFrame 앱 아이콘</title>
+  <desc>B안 스케치 드래그 심볼과 파란색 배경입니다.</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2096ff"/>
+      <stop offset="1" stop-color="#0763e5"/>
+    </linearGradient>
+  </defs>
+  <rect x="80" y="80" width="864" height="864" rx="194" fill="url(#blue)"/>
+  <g transform="translate(160 160) scale(35.2)" color="#fff">
+    <rect x="2.5" y="3" width="15" height="14" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+    <line x1="2.5" y1="6.8" x2="17.5" y2="6.8" stroke="currentColor" stroke-width="1.1"/>
+    <line x1="4.5" y1="4.9" x2="7.5" y2="4.9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+    <rect x="6.5" y="9" width="9" height="6.2" rx="1" fill="currentColor"/>
+    <circle cx="6.5" cy="9" r="1.1" fill="currentColor"/>
+  </g>
+</svg>

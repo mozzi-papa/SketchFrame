@@ -2,9 +2,9 @@
 
 활성 창을 원하는 영역에 직접 그려 배치하거나, 단축키로 반쪽·모서리·다른 모니터로 이동하는 macOS 메뉴 막대 앱입니다.
 
-**현재 버전: 0.1.2 (빌드 3)** · Apple Silicon · macOS 13 이상
+**현재 버전: 0.1.3 (빌드 4)** · Apple Silicon · macOS 13 이상
 
-[**Mac용 다운로드 · ZIP**](https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.2/sketchframe-0.1.2-arm64.zip) · [SHA-256 체크섬](https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.2/sketchframe-0.1.2-arm64.zip.sha256) · [최신 릴리스와 변경 내역](https://github.com/mozzi-papa/SketchFrame/releases/latest)
+[**Mac용 다운로드 · ZIP**](https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.3/sketchframe-0.1.3-arm64.zip) · [SHA-256 체크섬](https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.3/sketchframe-0.1.3-arm64.zip.sha256) · [최신 릴리스와 변경 내역](https://github.com/mozzi-papa/SketchFrame/releases/latest)
 
 ## 주요 기능
 
@@ -47,10 +47,10 @@ ZIP과 `.sha256` 파일을 같은 폴더에 내려받은 뒤 터미널에서 해
 
 ```sh
 cd ~/Downloads
-shasum -a 256 -c sketchframe-0.1.2-arm64.zip.sha256
+shasum -a 256 -c sketchframe-0.1.3-arm64.zip.sha256
 ```
 
-`sketchframe-0.1.2-arm64.zip: OK`가 표시되면 체크섬이 일치합니다. 실패하면 설치하지 말고 릴리스에서 파일을 다시 내려받아 주세요.
+`sketchframe-0.1.3-arm64.zip: OK`가 표시되면 체크섬이 일치합니다. 실패하면 설치하지 말고 릴리스에서 파일을 다시 내려받아 주세요.
 
 </details>
 
@@ -98,9 +98,9 @@ Rectangle과 기본키가 겹치므로 동시에 사용하려면 한쪽 키를 �
 
 ## 버전과 업데이트
 
-현재 버전은 **0.1.2 (빌드 3)**이며, 설치된 앱의 버전은 메뉴 맨 위와 설정창 아래에서 확인할 수 있습니다.
+현재 버전은 **0.1.3 (빌드 4)**이며, 설치된 앱의 버전은 메뉴 맨 위와 설정창 아래에서 확인할 수 있습니다.
 
-실행 3초 뒤와 이후 매시간 [SketchFrame GitHub Releases](https://github.com/mozzi-papa/SketchFrame/releases)를 확인합니다. 메뉴와 설정창의 **업데이트 확인…**으로 직접 확인할 수도 있습니다. 새 버전이 있으면 메뉴에 **새 버전으로 업데이트…**, 설정창에 새 버전 안내와 **지금 업데이트…**를 표시합니다. 시스템 알림 권한은 요청하지 않으며 자동 확인이 창 작업을 중단하는 팝업을 띄우지 않습니다.
+메뉴와 설정창의 **업데이트 확인…**에서 새 버전을 확인할 수 있습니다. 새 버전이 있으면 메뉴에 **새 버전으로 업데이트…**, 설정창에 새 버전 안내와 **지금 업데이트…**를 표시합니다. 시스템 알림 권한은 요청하지 않으며 자동 확인이 창 작업을 중단하는 팝업을 띄우지 않습니다.
 
 기존 사용자는 **업데이트 확인… → 새 버전으로 업데이트…**에서 설치를 진행할 수 있습니다. 다운로드한 앱의 체크섬과 서명을 검증하고 기존 앱을 교체한 뒤 다시 실행합니다. 단축키 설정은 유지합니다. 업데이트하려면 앱이 설치된 폴더에 쓰기 권한이 필요합니다.
 
@@ -177,7 +177,7 @@ brew uninstall --cask mozzi-papa/tap/sketchframe
 
 조회 상태와 시각은 메모리에서만 관리합니다. 네트워크 세션은 디스크 캐시·쿠키·자격 증명 저장을 사용하지 않습니다. 다운로드 임시 폴더는 `SketchFrameUpdate-…`, 설치 준비·백업 폴더는 앱 옆의 `.SketchFrameUpdate-…`이며 정상 완료 또는 복구 성공 후 정리합니다. 단축키 설정은 같은 앱 식별자를 사용해 유지합니다.
 
-릴리스는 `v0.1.2` 같은 정식 태그와 `sketchframe-0.1.2-arm64.zip`, `sketchframe-0.1.2-arm64.zip.sha256` 두 파일이 있어야 감지됩니다. 초안·시험판·다른 주소·체크섬 없는 배포는 제외합니다. 새 버전 배포 시 `Source/Info.plist`의 버전·빌드를 올리고 같은 인증서로 빌드한 뒤 아래 명령으로 배포 파일을 만듭니다. 서명에 사용한 개인키를 저장소나 ZIP에 포함하지 마세요.
+릴리스는 `v0.1.3` 같은 정식 태그와 `sketchframe-0.1.3-arm64.zip`, `sketchframe-0.1.3-arm64.zip.sha256` 두 파일이 있어야 감지됩니다. 초안·시험판·다른 주소·체크섬 없는 배포는 제외합니다. 새 버전 배포 시 `Source/Info.plist`의 버전·빌드를 올리고 같은 인증서로 빌드한 뒤 아래 명령으로 배포 파일을 만듭니다. 서명에 사용한 개인키를 저장소나 ZIP에 포함하지 마세요.
 
 ```sh
 sh Source/package-release.sh
