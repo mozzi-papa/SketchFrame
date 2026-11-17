@@ -262,7 +262,7 @@ def run(candidate_path, fixture_path):
     last_point = original_pointer
     try:
         candidate = subprocess.Popen([candidate_path], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        wait_for(lambda: '켜짐 ·' in status(candidate.pid), '검증 앱의 입력 감지가 연결되지 않았습니다.', 10)
+        wait_for(lambda: '키보드 배치: 사용 가능' in status(candidate.pid), '검증 앱의 입력 감지가 연결되지 않았습니다.', 10)
         fixture = subprocess.Popen([fixture_path], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         wait_for(lambda: frame(fixture.pid), '검증용 창이 준비되지 않았습니다.')
         activate(fixture.pid)

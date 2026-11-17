@@ -31,8 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
     private let stateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let resultItem = NSMenuItem(title: "⌘+⇧를 누르고 원하는 영역을 드래그하세요", action: nil, keyEquivalent: "")
-    private let toggleItem = NSMenuItem(title: "기능 켜기", action: #selector(toggle), keyEquivalent: "")
+    private var lastResult = "⌘+⇧를 누르고 원하는 영역을 드래그하세요"
+    private let toggleItem = NSMenuItem(title: "자유 영역 그리기 · ON", action: #selector(toggle), keyEquivalent: "")
+    private let drawingOnDot = AppDelegate.statusDot(.systemGreen)
+    private let drawingOffDot = AppDelegate.statusDot(.secondaryLabelColor)
     private let overlay = SelectionOverlay()
     private let shortcuts = ShortcutSettings()
     private let history = WindowHistory()
@@ -54,7 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var eventTap: CFMachPort?
     private var eventSource: CFRunLoopSource?
     private var permissionTimer: Timer?
-    private var requestedEnabled = true
+    private var sessionState = InteractionSessionState()
+    private var recoveryRetry: DispatchWorkItem?
+    private var recoveryAttempt = 0
+    private var drawEnabled = true
     private var drag: DragSession?
     private var swallowingMouse = false
     private var swallowingEscape = false
@@ -79,10 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(versionItem)
         menu.addItem(updateItem)
         stateItem.isEnabled = false
-        resultItem.isEnabled = false
         toggleItem.target = self
         menu.addItem(stateItem)
-        menu.addItem(resultItem)
         menu.addItem(.separator())
         menu.addItem(toggleItem)
         addItem("설정…", #selector(showSettings), key: ",")
@@ -91,8 +94,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(checkUpdateItem)
         menu.addItem(.separator())
         addItem("SketchFrame 종료", #selector(quit), key: "q")
-        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screenWillSleep),
-                                                         name: NSWorkspace.screensDidSleepNotification, object: nil)
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification,
+                     NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification,
+                     NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sessionChanged(_:)), name: name, object: nil)
+        }
+        // shortcut: 잠금 알림 이름은 공개 계약이 아니므로 공식 깨움·세션 알림과 주기 복구도 유지합니다.
+        for name in [InteractionSessionState.locked, InteractionSessionState.unlocked] {
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(sessionChanged(_:)), name: name,
+                                                               object: nil, suspensionBehavior: .deliverImmediately)
+        }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(activeApplicationChanged),
                                                          name: NSWorkspace.didActivateApplicationNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(displaysChanged),
@@ -101,11 +112,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.cancelSelection(reason: "단축키 변경")
             self?.report("단축키 설정을 적용했습니다.")
         }
-        resultItem.title = shortcuts.loadWarning ?? "설정에서 창 배치 단축키와 자유 드래그 조합을 변경할 수 있습니다."
+        lastResult = shortcuts.loadWarning ?? "설정에서 창 배치 단축키와 자유 드래그 조합을 변경할 수 있습니다."
+        focusTracker.onReady = { [weak self] in
+            self?.finishRecoveryIfReady()
+            self?.updateMenu()
+        }
         refreshPermission()
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        permissionTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
             self?.refreshPermission()
         }
+        RunLoop.main.add(permissionTimer!, forMode: .common)
         updater.onChange = { [weak self] in
             self?.updateMenu()
             self?.settingsWindow?.refreshUpdates()
@@ -129,34 +145,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) { updateMenu() }
 
+    private static func statusDot(_ color: NSColor) -> NSImage {
+        let image = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
     private var inputState: InputConnectionState {
         let connected = eventTap.map { CFMachPortIsValid($0) && CGEvent.tapIsEnabled(tap: $0) } ?? false
-        return InputConnectionState(trusted: AXIsProcessTrusted(), requestedEnabled: requestedEnabled, connected: connected)
+        return InputConnectionState(trusted: AXIsProcessTrusted(), drawEnabled: drawEnabled, connected: connected,
+                                    sessionAvailable: sessionState.available)
     }
 
     private func updateMenu() {
         let state = inputState
+        let binding = shortcuts.binding(for: .drawRegion)
         stateItem.title = state.title
-        if state.shouldConnect && state.connected {
-            let binding = shortcuts.binding(for: .drawRegion)
-            stateItem.title = recordingShortcuts ? "상태: 단축키 기록 중" :
-                "상태: 켜짐 · \(binding.disabled ? "창 배치 단축키" : binding.displayName)"
+        if state.keyboardEnabled {
+            if recordingShortcuts { stateItem.title = "단축키 기록 중입니다." }
+            else if drawEnabled && binding.disabled { stateItem.title = "자유 영역 그리기 단축키를 설정해 주세요." }
         }
+        stateItem.isHidden = state.keyboardEnabled && !recordingShortcuts && !(drawEnabled && binding.disabled)
         updateItem.isHidden = updater.available == nil
         updateItem.title = "새 버전 \(updater.available?.version ?? "")으로 업데이트…"
         updateItem.isEnabled = !updater.installing && !updater.checking
         checkUpdateItem.title = updater.checking ? "업데이트 확인 중…" : "업데이트 확인…"
         checkUpdateItem.isEnabled = !updater.checking && !updater.installing
-        toggleItem.title = requestedEnabled ? "기능 끄기" : "기능 켜기"
-        toggleItem.state = requestedEnabled ? .on : .off
-        statusItem.button?.toolTip = "\(AppUpdater.versionLabel)\n\(updater.status)\n\(stateItem.title)\n\(resultItem.title)\n\(diagnostics.summary)"
-        statusItem.button?.title = state.trusted && (!requestedEnabled || state.connected) ? "" : " !"
+        toggleItem.title = drawEnabled ? "자유 영역 그리기 · ON" : "자유 영역 그리기 · OFF"
+        let drawingActive = state.drawingEnabled && !recordingShortcuts && !binding.disabled
+        toggleItem.image = drawingActive ? drawingOnDot : drawingOffDot
+        toggleItem.toolTip = drawEnabled
+            ? "선택하면 마우스 자유 영역 그리기를 끕니다. 키보드 창 배치는 계속 사용할 수 있습니다."
+            : "선택하면 마우스 자유 영역 그리기를 켭니다."
+        statusItem.button?.toolTip = "\(AppUpdater.versionLabel)\n\(updater.status)\n\(state.title)\n\(toggleItem.title) · \(binding.displayName)\n\(lastResult)\n\(diagnostics.summary)\n창 추적: \(focusTracker.summary) · 작업: \(applying ? "적용 중" : "대기")"
+        statusItem.button?.title = state.keyboardEnabled ? "" : " !"
     }
 
     private func refreshPermission() {
+        if unlockWasMissed {
+            sessionChanged(Notification(name: InteractionSessionState.unlocked))
+            return
+        }
         let state = inputState
         if state.shouldConnect {
             if !state.connected {
+                cancelSelection(reason: "입력 연결 복구")
+                reconcileCapturedInput()
                 if let tap = eventTap, CFMachPortIsValid(tap) { CGEvent.tapEnable(tap: tap, enable: true) }
                 if !inputState.connected {
                     stopEventTap()
@@ -177,7 +215,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+        finishRecoveryIfReady()
         updateMenu()
+    }
+
+    private func finishRecoveryIfReady() {
+        guard inputState.keyboardEnabled, focusTracker.isReady, !applying else { return }
+        diagnostics.finishRecovery()
+        recoveryRetry?.cancel()
+        recoveryRetry = nil
+    }
+
+    private var unlockWasMissed: Bool {
+        guard sessionState.waitingForUnlock,
+              let session = CGSessionCopyCurrentDictionary() as? [String: Any],
+              session[kCGSessionOnConsoleKey as String] as? Bool == true else { return false }
+        // shortcut: 잠금 상태 키도 공개 계약이 아니므로 macOS 변경 시 잠금·복귀를 재검증합니다.
+        return session["CGSSessionScreenIsLocked"] as? Bool != true
+    }
+
+    private func scheduleRecoveryRetry() {
+        recoveryRetry?.cancel()
+        let delays = [0.08, 0.16, 0.32, 0.64]
+        guard sessionState.available, diagnostics.recoveryStartedAt != nil, recoveryAttempt < delays.count else { return }
+        let delay = delays[recoveryAttempt]
+        recoveryAttempt += 1
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self, self.sessionState.available else { return }
+            self.refreshPermission()
+            self.scheduleRecoveryRetry()
+        }
+        recoveryRetry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func reconcileCapturedInput() {
+        updateCapturedInput(mousePressed: CGEventSource.buttonState(.combinedSessionState, button: .left),
+                            escapePressed: CGEventSource.keyState(.combinedSessionState, key: 53))
+        swallowedKeys = swallowedKeys.filter { CGEventSource.keyState(.combinedSessionState, key: $0) }
+    }
+
+    private func refreshTarget(after error: Error, reference: FocusedWindowReference) {
+        guard (error as? WindowFailure)?.requiresFocusRefresh == true else { return }
+        focusTracker.invalidate(reference)
     }
 
     private func startEventTap() {
@@ -191,12 +271,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                                          options: .defaultTap, eventsOfInterest: mask,
                                          callback: callback, userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
-            resultItem.title = "입력 감지 연결 실패: 권한을 확인한 뒤 앱을 다시 실행해 주세요."
+            lastResult = "입력 감지 연결 실패: 권한을 확인한 뒤 앱을 다시 실행해 주세요."
             return
         }
         guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
             CFMachPortInvalidate(tap)
-            resultItem.title = "입력 감지 연결을 만들 수 없습니다. 앱을 다시 실행해 주세요."
+            lastResult = "입력 감지 연결을 만들 수 없습니다. 앱을 다시 실행해 주세요."
             return
         }
         eventTap = tap
@@ -231,13 +311,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             CGEvent.tapEnable(tap: tap, enable: false)
             self.refreshPermission()
             precondition(self.inputState.connected, "주기 검사 경로의 연결 복구 실패")
-            self.requestedEnabled = false
+            self.toggle()
+            precondition(self.inputState.connected && self.eventTap === tap, "그리기 OFF가 키보드 입력 연결을 중단했습니다.")
+            precondition(!self.inputState.drawingEnabled && self.toggleItem.title == "자유 영역 그리기 · OFF", "그리기 OFF 표시 실패")
+            precondition(self.toggleItem.image === self.drawingOffDot, "그리기 OFF 도트 실패")
+            precondition(!self.handle(.leftMouseDown, event: event), "그리기 OFF에서 마우스 입력을 가로챘습니다.")
+            CGEvent.tapEnable(tap: tap, enable: false)
             self.refreshPermission()
-            precondition(!self.inputState.connected && self.eventTap == nil, "사용자 끄기 무시")
-            self.requestedEnabled = true
-            self.refreshPermission()
-            precondition(self.inputState.connected, "다시 켜기 실패")
-            print("입력 중단 표시·콜백 복구·입력 해제 유지·놓친 해제 정리·주기 검사 복구·끄기·다시 켜기 검사 통과")
+            precondition(self.inputState.keyboardEnabled && !self.drawEnabled, "그리기 OFF 상태의 입력 연결 복구 실패")
+            self.swallowedKeys = [53]
+            let escape = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true)!
+            precondition(!self.handle(.keyDown, event: escape) && !self.swallowedKeys.contains(53), "해제를 놓친 뒤 새 키 누름이 차단됐습니다.")
+            self.swallowedKeys = [123]
+            self.swallowingMouse = true
+            self.swallowingEscape = true
+            self.sessionChanged(Notification(name: InteractionSessionState.locked))
+            precondition(!self.inputState.shouldConnect && self.eventTap == nil, "잠금 상태에서 입력 연결이 유지됐습니다.")
+            precondition(self.swallowedKeys.isEmpty && !self.swallowingMouse && !self.swallowingEscape, "잠금 경계의 이전 입력 정리 실패")
+            self.sessionChanged(Notification(name: InteractionSessionState.unlocked))
+            precondition(self.inputState.keyboardEnabled && !self.drawEnabled, "잠금 해제 후 즉시 연결·그리기 OFF 유지 실패")
+            precondition(self.diagnostics.recoveryReason == "잠금 해제", "복귀 원인 진단 실패")
+            self.toggle()
+            precondition(self.inputState.drawingEnabled && self.toggleItem.title == "자유 영역 그리기 · ON", "그리기 다시 켜기 실패")
+            precondition(!self.menu.items.contains { $0.title == self.lastResult }, "배치 결과가 메뉴에 남아 있습니다.")
+            print("입력 복구·그리기 OFF 연결 유지·해제 누락 정리·잠금/복귀 알림 처리·OFF 유지·메뉴 검사 통과")
             NSApp.terminate(nil)
         }
     }
@@ -255,9 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if type == .tapDisabledByTimeout { self.diagnostics.timeoutCount += 1 }
                 self.cancelSelection(reason: type == .tapDisabledByTimeout ? "입력 감지 시간 초과" : "입력 감지 중단")
                 // 누르는 중인 입력만 해제까지 소비하고, 중단 중 이미 놓은 입력은 정리합니다.
-                self.updateCapturedInput(mousePressed: CGEventSource.buttonState(.combinedSessionState, button: .left),
-                                         escapePressed: CGEventSource.keyState(.combinedSessionState, key: 53))
-                self.swallowedKeys = self.swallowedKeys.filter { CGEventSource.keyState(.combinedSessionState, key: $0) }
+                self.reconcileCapturedInput()
                 self.refreshPermission()
                 self.report(self.inputState.connected
                     ? "입력 연결을 복구하고 선택을 취소했습니다. 다시 드래그해 주세요."
@@ -268,7 +363,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if type == .keyDown || type == .keyUp {
             let key = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
             if type == .keyUp && swallowedKeys.remove(key) != nil { return true }
-            if type == .keyDown && swallowedKeys.contains(key) { return true }
+            if type == .keyDown && swallowedKeys.contains(key) {
+                if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return true }
+                swallowedKeys.remove(key)
+            }
             let escape = key == 53
             if type == .keyUp && escape && swallowingEscape {
                 swallowingEscape = false
@@ -282,7 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 return true
             }
-            if type == .keyDown, requestedEnabled, !recordingShortcuts, !swallowingMouse,
+            if type == .keyDown, sessionState.available, !recordingShortcuts, !swallowingMouse,
                event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
                NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier,
                let action = shortcuts.action(for: key, flags: event.flags.rawValue) {
@@ -290,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 swallowedKeys.insert(key)
                 DispatchQueue.main.async {
                     guard let reference = reference, self.focusTracker.isCurrent(reference) else {
+                        self.focusTracker.watch(NSWorkspace.shared.frontmostApplication)
                         self.report(self.focusTracker.message, error: true)
                         return
                     }
@@ -327,7 +426,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return true
         }
-        guard type == .leftMouseDown, requestedEnabled, eventTap != nil, !recordingShortcuts,
+        guard type == .leftMouseDown, drawEnabled, eventTap != nil, !recordingShortcuts,
+              sessionState.available,
               shortcuts.binding(for: .drawRegion).matchesDrag(flags: event.flags.rawValue) else { return false }
         swallowingMouse = true
         let point = event.location
@@ -335,6 +435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let reference = focusTracker.reference(for: application)
         // 입력 콜백은 가로챌 이벤트만 결정하고 화면 처리는 반환 후 순서대로 실행합니다.
         DispatchQueue.main.async {
+            guard self.drawEnabled, !self.recordingShortcuts else { return }
             self.cancelSelection(reason: "새 선택 시작")
             guard !self.applying else {
                 self.report("이전 창 변경을 처리 중입니다. 잠시 뒤 다시 선택해 주세요.", error: true)
@@ -405,6 +506,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         self.cancelSelection(reason: error.localizedDescription)
                         self.showFailure(error.localizedDescription, for: session)
+                        self.refreshTarget(after: error, reference: session.reference)
                     }
                 }
             }
@@ -419,6 +521,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         drag = nil
         applying = true
+        let revision = sessionState.revision
         report("\(target.name) 창을 배치하고 있습니다…")
         windowQueue.async {
             let result = Result {
@@ -428,9 +531,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             DispatchQueue.main.async {
                 self.applying = false
+                self.finishRecoveryIfReady()
+                guard self.sessionState.available, self.sessionState.revision == revision else { self.updateMenu(); return }
                 switch result {
                 case .failure(let error):
                     self.showFailure(error.localizedDescription, for: session)
+                    self.refreshTarget(after: error, reference: session.reference)
                 case .success(let placement):
                     self.diagnostics.recordPlacement(requested: session.rectangle, actual: placement.frame, scale: session.pixelScale)
                     if placement.sizeChanged {
@@ -478,13 +584,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func performAction(_ action: WindowAction, reference: FocusedWindowReference) {
-        guard requestedEnabled, !recordingShortcuts, !applying, !swallowingMouse else {
+        guard inputState.keyboardEnabled, !recordingShortcuts, !applying, !swallowingMouse else {
             report("이전 창 변경을 처리 중입니다. 잠시 뒤 다시 실행해 주세요.")
             return
         }
         guard focusTracker.isCurrent(reference) else { targetFocusChanged(); return }
         cancelSelection(reason: "창 배치 단축키")
         applying = true
+        let revision = sessionState.revision
         let screens = screenRegions()
         report("\(action.title) 배치를 적용하고 있습니다…")
         windowQueue.async {
@@ -500,8 +607,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             DispatchQueue.main.async {
                 self.applying = false
+                self.finishRecoveryIfReady()
+                guard self.sessionState.available, self.sessionState.revision == revision else { self.updateMenu(); return }
                 switch result {
-                case .failure(let error): self.report(error.localizedDescription, error: true)
+                case .failure(let error):
+                    self.report(error.localizedDescription, error: true)
+                    self.refreshTarget(after: error, reference: reference)
                 case .success(let (target, plan)):
                     self.diagnostics.lastPlacement = "키보드 배치 요청 · 결과 검사 생략"
                     let size = SelectionGeometry.pixelSizeLabel(plan.rectangle.size, scale: plan.screen.scale)
@@ -547,13 +658,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func report(_ message: String, error: Bool = false) {
-        resultItem.title = message
+        lastResult = message
         if error { NSSound.beep() }
         updateMenu()
     }
 
     @objc private func toggle() {
-        requestedEnabled.toggle()
+        drawEnabled.toggle()
         cancelSelection()
         refreshPermission()
     }
@@ -570,7 +681,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let alert = NSAlert()
         alert.messageText = "SketchFrame 사용 방법"
         let draw = shortcuts.binding(for: .drawRegion)
-        let dragHint = draw.disabled ? "자유 영역 그리기가 해제되어 있습니다. 설정에서 단축키를 지정해 주세요." : "현재 자유 영역 그리기: \(draw.displayName)"
+        let dragHint = !drawEnabled ? "자유 영역 그리기가 OFF입니다. 메뉴에서 켤 수 있습니다. 키보드 창 배치는 계속 사용할 수 있습니다." :
+            (draw.disabled ? "자유 영역 그리기가 해제되어 있습니다. 설정에서 단축키를 지정해 주세요." : "현재 자유 영역 그리기: \(draw.displayName)")
         alert.informativeText = "\(dragHint)\n\n1. 손쉬운 사용에서 SketchFrame를 허용해 주세요.\n2. 이동할 창을 선택해 주세요.\n3. 설정한 조합키를 누르고 원하는 위치에서 왼쪽 버튼으로 드래그하세요.\n4. 버튼을 놓으면 적용되고 Esc를 누르면 취소됩니다.\n\n그린 영역을 그대로 요청합니다. 자동 스냅과 최소 크기 보정은 없습니다. 앱이 요청한 크기를 지원하지 않으면 실제 적용된 크기를 유지하고 요청·실제 크기를 빨간색으로 안내합니다. 이전 배치로 복원하지 않습니다. 앱이 제공하는 제한이나 같은 창의 이전 거부 크기는 드래그 중 빨간색으로 경고합니다. 경고는 크기를 바꾸거나 적용을 막지 않습니다. 나머지는 버튼을 놓은 뒤 지원 여부를 확인합니다.\n\n크기는 시작 화면의 배율을 반영한 px로 표시합니다. 권한을 허용해도 연결되지 않으면 앱을 다시 실행해 주세요."
         alert.addButton(withTitle: "확인")
         NSApp.activate(ignoringOtherApps: true)
@@ -631,11 +743,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func displaysChanged() { cancelSelection(reason: "화면 구성 변경") }
-    @objc private func screenWillSleep() {
-        cancelSelection()
-        swallowingMouse = false
-        swallowingEscape = false
-        focusTracker.watch(nil)
+    @objc private func sessionChanged(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.sessionChanged(notification) }
+            return
+        }
+        sessionState.receive(notification.name)
+        if notification.name != InteractionSessionState.locked && unlockWasMissed {
+            sessionState.receive(InteractionSessionState.unlocked)
+        }
+        recoveryRetry?.cancel()
+        recoveryRetry = nil
+        cancelSelection(reason: "화면·세션 상태 변경")
+        focusTracker.stop()
+        if sessionState.available {
+            reconcileCapturedInput()
+            let reason = notification.name == InteractionSessionState.unlocked ? "잠금 해제" : "화면·세션 복귀"
+            diagnostics.beginRecovery(reason)
+            recoveryAttempt = 0
+            refreshPermission()
+            scheduleRecoveryRetry()
+        } else {
+            swallowingMouse = false
+            swallowingEscape = false
+            swallowedKeys.removeAll()
+            stopEventTap()
+            updateMenu()
+        }
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
@@ -643,10 +777,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         updater.stop()
         permissionTimer?.invalidate()
+        recoveryRetry?.cancel()
         cancelSelection()
         stopEventTap()
         focusTracker.stop()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)
     }
 }

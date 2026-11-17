@@ -4,6 +4,10 @@ import ApplicationServices
 struct WindowFailure: LocalizedError {
     let message: String
     var axError: AXError? = nil
+    var targetChanged = false
+    var requiresFocusRefresh: Bool {
+        targetChanged || axError == .invalidUIElement || axError == .cannotComplete || axError == .noValue
+    }
     var errorDescription: String? { message }
 }
 
@@ -158,8 +162,11 @@ enum WindowController {
     }
 
     static func confirmFocusedWindow(_ window: AXUIElement, application app: NSRunningApplication) throws {
+        guard app.isActive else {
+            throw WindowFailure(message: "대상 앱이 바뀌어 선택을 취소했습니다.", targetChanged: true)
+        }
         guard CFEqual(window, try focusedWindow(application: app)) else {
-            throw WindowFailure(message: "대상 창이 바뀌어 선택을 취소했습니다. 창을 선택한 뒤 다시 그려 주세요.")
+            throw WindowFailure(message: "대상 창이 바뀌어 선택을 취소했습니다. 창을 선택한 뒤 다시 그려 주세요.", targetChanged: true)
         }
     }
 
@@ -214,7 +221,8 @@ enum WindowController {
     static func applyWithoutSizeCheck(_ rect: CGRect, to target: WindowTarget) throws {
         let errors = try requestFrame(rect, to: target)
         guard errors.resize == .success, errors.align == .success else {
-            throw WindowFailure(message: "창 변경 요청 중 오류가 발생했습니다. 현재 창 상태를 확인해 주세요.")
+            throw WindowFailure(message: "창 변경 요청 중 오류가 발생했습니다. 현재 창 상태를 확인해 주세요.",
+                                axError: errors.resize != .success ? errors.resize : errors.align)
         }
     }
 
@@ -250,7 +258,17 @@ final class FocusedWindowTracker {
     private var cached: FocusedWindowReference?
     private var installing = false
     private var loading = false
+    private var observerWork: DispatchWorkItem?
+    private var lookupWork: DispatchWorkItem?
+    var onReady: (() -> Void)?
     private(set) var message = "대상 창을 확인 중입니다. 잠시 뒤 다시 그려 주세요."
+
+    var isReady: Bool { cached != nil }
+    var summary: String {
+        if installing { return "창 변경 알림 연결 중" }
+        if loading { return "활성 창 조회 중" }
+        return isReady ? "활성 창 준비됨" : message
+    }
 
     init(queue: DispatchQueue, onChange: @escaping () -> Void) {
         self.queue = queue
@@ -267,6 +285,11 @@ final class FocusedWindowTracker {
         reference.isCurrent(application: application, revision: revision) && cached != nil
     }
 
+    func invalidate(_ reference: FocusedWindowReference) {
+        guard isCurrent(reference) else { return }
+        focusChanged()
+    }
+
     func watch(_ app: NSRunningApplication?) {
         if application?.processIdentifier == app?.processIdentifier {
             if app == nil || installing { return }
@@ -280,7 +303,7 @@ final class FocusedWindowTracker {
         application = app
         installing = true
         let expected = revision
-        queue.async {
+        let work = DispatchWorkItem {
             var created: AXObserver?
             let callback: AXObserverCallback = { observer, _, _, context in
                 guard let context = context else { return }
@@ -297,6 +320,7 @@ final class FocusedWindowTracker {
             } ?? creation
             DispatchQueue.main.async {
                 guard self.revision == expected, self.application?.processIdentifier == app.processIdentifier else { return }
+                self.observerWork = nil
                 self.installing = false
                 guard creation == .success, registration == .success, let observer = created else {
                     self.message = "이 앱의 창 변경을 확인할 수 없습니다. 다른 창에서 다시 시도해 주세요."
@@ -307,9 +331,12 @@ final class FocusedWindowTracker {
                 self.focusChanged()
             }
         }
+        observerWork = work
+        queue.async(execute: work)
     }
 
     private func focusChanged() {
+        lookupWork?.cancel()
         revision &+= 1
         cached = nil
         message = "대상 창을 확인 중입니다. 잠시 뒤 다시 그려 주세요."
@@ -320,14 +347,16 @@ final class FocusedWindowTracker {
 
     private func loadWindow(_ app: NSRunningApplication, revision expected: UInt64, attempt: Int = 0) {
         loading = true
-        queue.async {
+        let work = DispatchWorkItem {
             let result = Result { try WindowController.focusedWindow(application: app) }
             DispatchQueue.main.async {
                 guard self.revision == expected, self.application?.processIdentifier == app.processIdentifier else { return }
+                self.lookupWork = nil
                 switch result {
                 case .success(let window):
                     self.loading = false
                     self.cached = FocusedWindowReference(application: app, window: window, revision: expected)
+                    self.onReady?()
                 case .failure(let error):
                     if (error as? WindowFailure)?.axError == .cannotComplete && attempt == 0 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
@@ -341,9 +370,15 @@ final class FocusedWindowTracker {
                 }
             }
         }
+        lookupWork = work
+        queue.async(execute: work)
     }
 
     func stop() {
+        observerWork?.cancel()
+        lookupWork?.cancel()
+        observerWork = nil
+        lookupWork = nil
         revision &+= 1
         cached = nil
         application = nil

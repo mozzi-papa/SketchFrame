@@ -72,15 +72,19 @@ def title(app, label):
     return result
 
 
-def settings(app, pid):
+def menu_action(app, label):
     bar = n.get(app, 'AXExtrasMenuBar')
     children = n.get(bar, 'AXChildren')
     action = n.string(None, b'AXPress', 0x08000100)
     # 메뉴가 열린 채로 반환되어 AXPress가 시간 초과를 보고할 수 있습니다.
     n.perform_action(n.array_item(children, 0), action)
-    press(bar, '설정…')
+    press(bar, label)
     for raw in [action, children, bar]:
         n.release(raw)
+
+
+def settings(app, pid):
+    menu_action(app, '설정…')
     n.wait_for(lambda: n.frontmost_pid() == pid, '설정 창 활성화 실패')
 
 
@@ -105,7 +109,7 @@ def run(candidate_path, fixture_path):
         set_pref(pref_key, None, domain)
         assert sync_pref(domain)
         candidate = subprocess.Popen([candidate_path])
-        n.wait_for(lambda: '켜짐 ·' in n.status(candidate.pid), '입력 연결 실패', 10)
+        n.wait_for(lambda: '키보드 배치: 사용 가능' in n.status(candidate.pid), '입력 연결 실패', 10)
         app = n.create_app(candidate.pid)
         n.set_timeout(app, 0.5)
         settings(app, candidate.pid)
@@ -129,7 +133,7 @@ def run(candidate_path, fixture_path):
         app = None
         terminate(candidate)
         candidate = subprocess.Popen([candidate_path])
-        n.wait_for(lambda: '켜짐 ·' in n.status(candidate.pid), '재실행 입력 연결 실패', 10)
+        n.wait_for(lambda: '키보드 배치: 사용 가능' in n.status(candidate.pid), '재실행 입력 연결 실패', 10)
         app = n.create_app(candidate.pid)
         settings(app, candidate.pid)
         assert title(app, '가운데 절반 단축키') == '⌃⌥H'
@@ -151,6 +155,36 @@ def run(candidate_path, fixture_path):
             'ObjC.import("AppKit");var s=$.NSScreen.screens.objectAtIndex(0),f=s.frame,r=s.visibleFrame;JSON.stringify({x:r.origin.x,y:f.origin.y+f.size.height-r.origin.y-r.size.height,w:r.size.width,h:r.size.height,scale:s.backingScaleFactor,count:$.NSScreen.screens.count})'], text=True))
         screen['count'] = int(screen['count'])
         x,y,w,h = [screen[k] for k in ['x','y','w','h']]
+        menu_action(app, '자유 영역 그리기 · ON')
+        n.wait_for(lambda: '자유 영역 그리기 · OFF' in n.status(candidate.pid), '그리기 OFF 실패')
+        assert '키보드 배치: 사용 가능' in n.status(candidate.pid), '그리기 OFF가 키보드 입력을 중단했습니다.'
+        n.activate(fixture.pid)
+        time.sleep(0.3)
+        start = n.Point(baseline[0]+100, baseline[1]+150)
+        end = n.Point(start.x+60, start.y+40)
+        try:
+            n.hold_drag(start, end, fixture.pid)
+            assert not n.visible_overlay(candidate.pid), '그리기 OFF에서 미리보기가 표시됐습니다.'
+        finally:
+            n.mouse(2, end)
+        key(124, CONTROL_OPTION)
+        n.wait_for(lambda: n.same_frame(n.frame(fixture.pid), (x+w/2,y,w/2,h)) and '배치 요청 완료' in n.status(candidate.pid),
+                   '그리기 OFF에서 키보드 오른쪽 절반 배치 실패')
+        key(51, CONTROL_OPTION)
+        n.wait_for(lambda: n.same_frame(n.frame(fixture.pid), baseline), '그리기 OFF에서 키보드 복원 실패')
+        menu_action(app, '자유 영역 그리기 · OFF')
+        n.wait_for(lambda: '자유 영역 그리기 · ON' in n.status(candidate.pid), '그리기 다시 켜기 실패')
+        n.activate(fixture.pid)
+        time.sleep(0.3)
+        try:
+            n.hold_drag(start, end, fixture.pid)
+            n.wait_for(lambda: n.visible_overlay(candidate.pid), '그리기 ON에서 미리보기가 없습니다.')
+            key(53)
+        finally:
+            n.mouse(2, end)
+        n.wait_for(lambda: not n.visible_overlay(candidate.pid), '그리기 ON 미리보기 취소 실패')
+        assert n.same_frame(n.frame(fixture.pid), baseline), '미리보기 취소 후 창이 변경됐습니다.'
+        checks += ['그리기 OFF 마우스 통과', '그리기 OFF 키보드 배치·복원', '그리기 ON 미리보기·취소']
         timings = []
         cases = [(123,0,(x,y,w/2,h)),(124,0,(x+w/2,y,w/2,h)),
                  (126,0,(x,y,w,h/2)),(125,0,(x,y+h/2,w,h/2)),

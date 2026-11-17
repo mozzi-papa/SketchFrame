@@ -158,14 +158,59 @@ enum SelfCheck {
         diagnostics.recordPlacement(requested: boundary, actual: boundary.offsetBy(dx: 0.002, dy: 0), scale: 2)
         check(diagnostics.lastPlacement.contains("100.2490") && diagnostics.lastPlacement.contains("100.2510"), "요청·실제 원본 위치 진단")
         check(diagnostics.lastPlacement.contains("0.0040"), "배율 반영 위치 차이 진단")
+        diagnostics.beginRecovery("잠금 해제", at: 10)
+        check(diagnostics.summary.contains("복구 중"), "복귀 준비 중 진단")
+        diagnostics.finishRecovery(at: 10.075)
+        check(abs((diagnostics.recoveryMilliseconds ?? 0) - 75) < 0.0001 && diagnostics.recoveryStartedAt == nil,
+              "복귀부터 입력·창 준비까지 시간 진단")
+        diagnostics.finishRecovery(at: 20)
+        check(abs((diagnostics.recoveryMilliseconds ?? 0) - 75) < 0.0001, "반복 검사에서 복구 시간 유지")
+        var session = InteractionSessionState()
+        check(session.available, "시작 시 입력 허용")
+        session.receive(InteractionSessionState.locked)
+        check(!session.available && session.waitingForUnlock, "화면 잠금 시 입력 중단")
+        session.receive(NSWorkspace.screensDidSleepNotification)
+        check(!session.waitingForUnlock, "화면 절전 중에는 잠금 해제 보조 조회 대기")
+        session.receive(NSWorkspace.screensDidWakeNotification)
+        check(!session.available, "화면 깨움만으로 잠금 해제 처리하지 않음")
+        session.receive(InteractionSessionState.unlocked)
+        check(session.available, "잠금 해제 후 입력 복구")
+        session.receive(NSWorkspace.sessionDidResignActiveNotification)
+        session.receive(InteractionSessionState.locked)
+        session.receive(InteractionSessionState.unlocked)
+        check(!session.available, "다른 사용자 세션에서는 잠금 해제 알림만으로 재개하지 않음")
+        session.receive(NSWorkspace.sessionDidBecomeActiveNotification)
+        check(session.available, "현재 사용자 세션 복귀 후 재개")
+        session.receive(NSWorkspace.willSleepNotification)
+        session.receive(InteractionSessionState.unlocked)
+        check(!session.available, "시스템 절전 중에는 잠금 해제만으로 재개하지 않음")
+        session.receive(NSWorkspace.didWakeNotification)
+        check(session.available, "시스템 복귀 후 재개")
+        let revision = session.revision
+        session.receive(Notification.Name("검증용 무관한 알림"))
+        check(session.revision == revision, "무관한 알림은 복귀 세대를 변경하지 않음")
+        session.receive(InteractionSessionState.locked)
+        check(session.revision != revision, "세션 변경 후 이전 작업 결과 구분")
+        check(WindowFailure(message: "대상 변경", targetChanged: true).requiresFocusRefresh, "대상 변경 오류의 창 캐시 폐기")
+        for error: AXError in [.invalidUIElement, .cannotComplete, .noValue] {
+            check(WindowFailure(message: "창 조회 실패", axError: error).requiresFocusRefresh, "창 조회 오류의 재조회 정책")
+        }
+        check(!WindowFailure(message: "크기 변경 불가", axError: .attributeUnsupported).requiresFocusRefresh,
+              "크기 지원 제한만으로 창 정보를 폐기하지 않음")
         for trusted in [false, true] {
-            for requested in [false, true] {
+            for drawEnabled in [false, true] {
                 for connected in [false, true] {
-                    let state = InputConnectionState(trusted: trusted, requestedEnabled: requested, connected: connected)
-                    check(state.shouldConnect == (trusted && requested), "권한과 사용자 설정에 따른 연결 정책")
-                    let expectedTitle = !trusted ? "상태: 손쉬운 사용 권한 필요" :
-                        (!requested ? "상태: 꺼짐" : (connected ? "상태: 켜짐 · ⌘⇧ 드래그" : "상태: 입력 감지 연결 필요"))
-                    check(state.title == expectedTitle, "실제 연결 상태에 따른 메뉴 표시")
+                    for available in [false, true] {
+                        let state = InputConnectionState(trusted: trusted, drawEnabled: drawEnabled, connected: connected,
+                                                         sessionAvailable: available)
+                        check(state.shouldConnect == (trusted && available), "사용 가능한 세션의 공용 입력 연결 정책")
+                        check(state.keyboardEnabled == (trusted && connected && available), "그리기 OFF에서도 키보드 배치 유지")
+                        check(state.drawingEnabled == (trusted && connected && drawEnabled && available), "그리기와 세션 상태에 따른 입력 정책")
+                        let expectedTitle = !trusted ? "상태: 손쉬운 사용 권한 필요" :
+                            (!available ? "상태: 화면 잠금·절전 중" :
+                             (connected ? "키보드 배치: 사용 가능" : "상태: 입력 감지 연결 필요"))
+                        check(state.title == expectedTitle, "실제 연결·세션 상태에 따른 메뉴 표시")
+                    }
                 }
             }
         }
