@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var swallowingMouse = false
     private var swallowingEscape = false
     private var applying = false
+    private var keyboardRequest: (application: NSRunningApplication, cancellation: Progress)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = NSWorkspace.shared.frontmostApplication
@@ -382,17 +383,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             if type == .keyDown, sessionState.available, !recordingShortcuts, !swallowingMouse,
                event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
-               NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+               let application = NSWorkspace.shared.frontmostApplication,
+               application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
                let action = shortcuts.action(for: key, flags: event.flags.rawValue) {
-                let reference = focusTracker.reference(for: NSWorkspace.shared.frontmostApplication)
+                let reference = focusTracker.reference(for: application)
+                let revision = sessionState.revision
                 swallowedKeys.insert(key)
                 DispatchQueue.main.async {
-                    guard let reference = reference, self.focusTracker.isCurrent(reference) else {
-                        self.focusTracker.watch(NSWorkspace.shared.frontmostApplication)
-                        self.report(self.focusTracker.message, error: true)
+                    self.diagnostics.recordKeyboard("\(action.title) 수신 · 창 정보 \(reference == nil ? "직접 조회" : "준비됨")")
+                    guard self.sessionState.revision == revision, application.isActive,
+                          reference == nil || self.focusTracker.isCurrent(reference!) else {
+                        self.diagnostics.recordKeyboard("\(action.title) 취소 · 대상 앱·창 또는 세션 변경")
+                        self.updateMenu()
                         return
                     }
-                    self.performAction(action, reference: reference)
+                    self.performAction(action, application: application, reference: reference)
                 }
                 return true
             }
@@ -583,23 +588,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func performAction(_ action: WindowAction, reference: FocusedWindowReference) {
+    private func performAction(_ action: WindowAction, application: NSRunningApplication, reference: FocusedWindowReference?) {
         guard inputState.keyboardEnabled, !recordingShortcuts, !applying, !swallowingMouse else {
+            let reason = !inputState.keyboardEnabled ? "입력 연결·세션 대기" :
+                (recordingShortcuts ? "단축키 기록 중" : (applying ? "이전 배치 처리 중" : "마우스 선택 중"))
+            diagnostics.recordKeyboard("\(action.title) 취소 · \(reason)")
             report("이전 창 변경을 처리 중입니다. 잠시 뒤 다시 실행해 주세요.")
             return
         }
-        guard focusTracker.isCurrent(reference) else { targetFocusChanged(); return }
         cancelSelection(reason: "창 배치 단축키")
         applying = true
         let revision = sessionState.revision
+        let cancellation = Progress(totalUnitCount: 1)
+        keyboardRequest = (application, cancellation)
+        let started = ProcessInfo.processInfo.systemUptime
         let screens = screenRegions()
         report("\(action.title) 배치를 적용하고 있습니다…")
         windowQueue.async {
+            let lookupStarted = ProcessInfo.processInfo.systemUptime
+            var lookupMilliseconds = 0.0
             let result = Result { () -> (WindowTarget, WindowLayoutPlan) in
-                let target = try WindowController.capture(application: reference.application, window: reference.window, inspectSize: false)
+                let target = try WindowController.captureForKeyboard(application: application, window: reference?.window,
+                                                                    isCancelled: { cancellation.isCancelled }) { code in
+                    DispatchQueue.main.async {
+                        self.diagnostics.recordKeyboard("\(action.title) 창 조회 재시도 · AX \(code.rawValue)")
+                        self.updateMenu()
+                    }
+                }
+                lookupMilliseconds = (ProcessInfo.processInfo.systemUptime - lookupStarted) * 1000
                 let sourceScale = WindowLayoutCalculator.screen(for: target.originalFrame, screens: screens)?.scale ?? 1
                 let restore = action == .restore ? self.history.restoreFrame(for: target, scale: sourceScale) : nil
                 let plan = try WindowLayoutCalculator.plan(action: action, window: target.originalFrame, screens: screens, restoreFrame: restore)
+                guard !cancellation.isCancelled else {
+                    throw WindowFailure(message: "세션 또는 대상 앱이 바뀌어 단축키 요청을 취소했습니다.", targetChanged: true)
+                }
                 try WindowController.applyWithoutSizeCheck(plan.rectangle, to: target)
                 self.history.record(before: target.originalFrame, after: nil, for: target,
                                     scale: plan.screen.scale, restored: action == .restore)
@@ -607,13 +629,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             DispatchQueue.main.async {
                 self.applying = false
+                self.keyboardRequest = nil
                 self.finishRecoveryIfReady()
-                guard self.sessionState.available, self.sessionState.revision == revision else { self.updateMenu(); return }
+                let milliseconds = (ProcessInfo.processInfo.systemUptime - started) * 1000
+                guard self.sessionState.available, self.sessionState.revision == revision, !cancellation.isCancelled else {
+                    self.diagnostics.recordKeyboard("\(action.title) 취소 · 앱·세션 전환 (\(Int(milliseconds)) ms)")
+                    self.updateMenu()
+                    return
+                }
                 switch result {
                 case .failure(let error):
+                    self.diagnostics.recordKeyboard("\(action.title) 실패 · \(error.localizedDescription) (\(Int(milliseconds)) ms)")
                     self.report(error.localizedDescription, error: true)
-                    self.refreshTarget(after: error, reference: reference)
+                    if let reference = reference { self.refreshTarget(after: error, reference: reference) }
                 case .success(let (target, plan)):
+                    self.diagnostics.recordKeyboard("\(action.title) 완료 · 대기 \(Int((lookupStarted - started) * 1000)) / 조회 \(Int(lookupMilliseconds)) / 전체 \(Int(milliseconds)) ms")
                     self.diagnostics.lastPlacement = "키보드 배치 요청 · 결과 검사 생략"
                     let size = SelectionGeometry.pixelSizeLabel(plan.rectangle.size, scale: plan.screen.scale)
                     self.report("\(target.name) · \(action.title) · 배치 요청 완료 (\(size))")
@@ -654,6 +684,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func activeApplicationChanged() {
+        if let request = keyboardRequest, !request.application.isActive { request.cancellation.cancel() }
         focusTracker.watch(inputState.shouldConnect ? NSWorkspace.shared.frontmostApplication : nil)
     }
 
@@ -749,6 +780,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         sessionState.receive(notification.name)
+        keyboardRequest?.cancellation.cancel()
         if notification.name != InteractionSessionState.locked && unlockWasMissed {
             sessionState.receive(InteractionSessionState.unlocked)
         }

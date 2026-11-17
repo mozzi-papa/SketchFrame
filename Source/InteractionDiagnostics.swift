@@ -53,6 +53,13 @@ struct InteractionDiagnostics {
     private(set) var recoveryStartedAt: TimeInterval?
     private(set) var recoveryMilliseconds: Double?
     private(set) var recoveryReason = "없음"
+    private(set) var keyboardEvents: [String] = []
+
+    mutating func recordKeyboard(_ message: String, at date: Date = Date()) {
+        let time = DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)
+        keyboardEvents.append("\(time) · \(message)")
+        if keyboardEvents.count > 8 { keyboardEvents.removeFirst(keyboardEvents.count - 8) }
+    }
 
     mutating func beginRecovery(_ reason: String, at time: TimeInterval = Date.timeIntervalSinceReferenceDate) {
         recoveryReason = reason
@@ -83,6 +90,7 @@ struct InteractionDiagnostics {
                maximumInputMilliseconds, preparationMilliseconds, lookupMilliseconds,
                timeoutCount, retryCount, lastCancellation) + "\n배치: " + lastPlacement +
             "\n복구: \(recoveryReason) · " + (recoveryMilliseconds.map { String(format: "%.2f ms", $0) } ??
-                                           (recoveryStartedAt == nil ? "대기" : "복구 중"))
+                                           (recoveryStartedAt == nil ? "대기" : "복구 중")) +
+            (keyboardEvents.isEmpty ? "" : "\n최근 단축키:\n" + keyboardEvents.joined(separator: "\n"))
     }
 }

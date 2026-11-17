@@ -155,6 +155,11 @@ enum SelfCheck {
         diagnostics.recordInput(seconds: 0.0005)
         check(diagnostics.maximumInputMilliseconds == 1, "입력 최대 시간")
         check(diagnostics.summary.contains("시간 초과 0"), "시간 초과 진단")
+        check(!diagnostics.summary.contains("최근 단축키:"), "단축키 기록 전 도움말")
+        for index in 0..<10 { diagnostics.recordKeyboard("검사 \(index)", at: Date(timeIntervalSince1970: 0)) }
+        check(diagnostics.keyboardEvents.count == 8 && diagnostics.keyboardEvents.first?.hasSuffix("검사 2") == true,
+              "단축키 진단 기록을 최근 8개로 제한")
+        check(diagnostics.summary.contains("검사 9") && !diagnostics.summary.contains("검사 0"), "단축키 진단 도움말")
         diagnostics.recordPlacement(requested: boundary, actual: boundary.offsetBy(dx: 0.002, dy: 0), scale: 2)
         check(diagnostics.lastPlacement.contains("100.2490") && diagnostics.lastPlacement.contains("100.2510"), "요청·실제 원본 위치 진단")
         check(diagnostics.lastPlacement.contains("0.0040"), "배율 반영 위치 차이 진단")

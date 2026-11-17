@@ -191,6 +191,29 @@ enum WindowController {
                             sizeAdvice: inspectSize ? sizeAdvice(of: window) : WindowSizeAdvice())
     }
 
+    static func captureForKeyboard(application app: NSRunningApplication, window: AXUIElement?,
+                                   isCancelled: () -> Bool, onRetry: (AXError) -> Void) throws -> WindowTarget {
+        var selected = window
+        var attempt = 0
+        while true {
+            guard !isCancelled(), app.isActive, !app.isTerminated else {
+                throw WindowFailure(message: "대상 앱 또는 세션이 바뀌어 단축키 요청을 취소했습니다.", targetChanged: true)
+            }
+            do {
+                // 창 추적 준비와 독립적으로 조회하며, 한 번 확인한 창은 재시도 중에도 유지합니다.
+                if selected == nil { selected = try focusedWindow(application: app) }
+                return try capture(application: app, window: selected!, inspectSize: false)
+            } catch {
+                guard let failure = error as? WindowFailure, !failure.targetChanged,
+                      let code = failure.axError, code == .cannotComplete || code == .noValue,
+                      attempt < 2, !isCancelled() else { throw error }
+                onRetry(code)
+                attempt += 1
+                Thread.sleep(forTimeInterval: 0.08 * Double(attempt))
+            }
+        }
+    }
+
     private static func setPosition(_ point: CGPoint, on window: AXUIElement) -> AXError {
         var point = point
         guard let value = AXValueCreate(.cgPoint, &point) else { return .failure }
