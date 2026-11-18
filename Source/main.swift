@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
     private let stateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private var lastResult = "⌘+⇧를 누르고 원하는 영역을 드래그하세요"
+    private var lastResult = "설정에서 자유 영역 그리기 단축키를 확인해 주세요."
     private let toggleItem = NSMenuItem(title: "자유 영역 그리기 · ON", action: #selector(toggle), keyEquivalent: "")
     private let drawingOnDot = AppDelegate.statusDot(.systemGreen)
     private let drawingOffDot = AppDelegate.statusDot(.secondaryLabelColor)
@@ -549,29 +549,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         self.rejectedSizes.forget(session.rectangle.size, for: target, scale: session.pixelScale)
                     }
-                    if let warning = placement.warning {
-                        self.showFailure(warning, for: session, rectangle: placement.frame, warning: true)
-                    } else {
-                        let size = SelectionGeometry.pixelSizeLabel(placement.frame.size, scale: session.pixelScale)
-                        self.report("\(target.name) · \(size) 배치 완료")
-                    }
+                    let size = SelectionGeometry.pixelSizeLabel(placement.frame.size, scale: session.pixelScale)
+                    self.report("\(target.name) · \(size) 배치 완료")
                 }
             }
         }
     }
 
-    private func showFailure(_ message: String, for session: DragSession, rectangle: CGRect? = nil, warning: Bool = false) {
-        showNotice(message, name: session.name, on: session.screen, quartzFrame: session.quartzFrame,
-                   rectangle: rectangle ?? session.rectangle, warning: warning)
-    }
-
-    private func showNotice(_ message: String, name: String, on screen: NSScreen, quartzFrame: CGRect,
-                            rectangle: CGRect, warning: Bool) {
+    private func showFailure(_ message: String, for session: DragSession) {
         errorDismissal?.cancel()
-        overlay.show(on: screen, quartzFrame: quartzFrame, name: name)
-        overlay.update(rectangle, error: warning ? nil : message,
-                       warning: warning ? message : nil, completed: true)
-        report(message.replacingOccurrences(of: "\n", with: " · "), error: !warning)
+        overlay.show(on: session.screen, quartzFrame: session.quartzFrame, name: session.name)
+        overlay.update(session.rectangle, error: message, completed: true)
+        report(message.replacingOccurrences(of: "\n", with: " · "), error: true)
         let dismissal = DispatchWorkItem { [weak self] in self?.overlay.hide() }
         errorDismissal = dismissal
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: dismissal)
@@ -714,7 +703,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let draw = shortcuts.binding(for: .drawRegion)
         let dragHint = !drawEnabled ? "자유 영역 그리기가 OFF입니다. 메뉴에서 켤 수 있습니다. 키보드 창 배치는 계속 사용할 수 있습니다." :
             (draw.disabled ? "자유 영역 그리기가 해제되어 있습니다. 설정에서 단축키를 지정해 주세요." : "현재 자유 영역 그리기: \(draw.displayName)")
-        alert.informativeText = "\(dragHint)\n\n1. 손쉬운 사용에서 SketchFrame를 허용해 주세요.\n2. 이동할 창을 선택해 주세요.\n3. 설정한 조합키를 누르고 원하는 위치에서 왼쪽 버튼으로 드래그하세요.\n4. 버튼을 놓으면 적용되고 Esc를 누르면 취소됩니다.\n\n그린 영역을 그대로 요청합니다. 자동 스냅과 최소 크기 보정은 없습니다. 앱이 요청한 크기를 지원하지 않으면 실제 적용된 크기를 유지하고 요청·실제 크기를 빨간색으로 안내합니다. 이전 배치로 복원하지 않습니다. 앱이 제공하는 제한이나 같은 창의 이전 거부 크기는 드래그 중 빨간색으로 경고합니다. 경고는 크기를 바꾸거나 적용을 막지 않습니다. 나머지는 버튼을 놓은 뒤 지원 여부를 확인합니다.\n\n크기는 시작 화면의 배율을 반영한 px로 표시합니다. 권한을 허용해도 연결되지 않으면 앱을 다시 실행해 주세요."
+        alert.informativeText = "\(dragHint)\n\n1. 손쉬운 사용에서 SketchFrame를 허용해 주세요.\n2. 이동할 창을 선택해 주세요.\n3. 설정한 조합키를 누르고 원하는 위치에서 왼쪽 버튼으로 드래그하세요.\n4. 버튼을 놓으면 적용되고 Esc를 누르면 취소됩니다.\n\n그린 영역을 그대로 요청합니다. 자동 스냅과 최소 크기 보정은 없습니다. 창이 배치되면 실제 위치와 크기를 유지합니다. 요청·실제 크기는 메뉴 막대 아이콘 도움말에 표시합니다. 배치 오류만 빨간색으로 안내합니다. 앱이 제공하는 제한이나 같은 창의 이전 거부 크기는 드래그 중 빨간색으로 경고합니다. 경고는 크기를 바꾸거나 적용을 막지 않습니다. 나머지는 버튼을 놓은 뒤 지원 여부를 확인합니다.\n\n크기는 시작 화면의 배율을 반영한 px로 표시합니다. 권한을 허용해도 연결되지 않으면 앱을 다시 실행해 주세요."
         alert.addButton(withTitle: "확인")
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()

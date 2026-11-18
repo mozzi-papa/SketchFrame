@@ -68,44 +68,37 @@ enum SelfCheck {
         check(WindowSizeAdvice().warning(for: CGSize(width: 10, height: 10), scale: 1) == nil, "모르는 제한 추정 금지")
         let small = CGRect(x: 100, y: 150, width: 34, height: 46)
         let larger = CGRect(x: 100, y: 150, width: 400, height: 300)
-        let unknownPlacement = WindowPlacement(requested: small, actual: larger, advice: WindowSizeAdvice(), scale: 2)
+        let unknownPlacement = WindowPlacement(requested: small, actual: larger, scale: 2)
         check(unknownPlacement.frame == larger, "크기 불일치에서도 실제 이동 결과 유지")
         check(unknownPlacement.sizeChanged, "크기 불일치 기록")
-        check(unknownPlacement.warning?.contains("앱의 크기 제한으로 선택한 영역과 다르게 배치됐습니다.") == true,
-              "원인을 모르면 일반 크기 제한 안내")
-        check(unknownPlacement.warning?.contains("요청 68 × 92 px · 실제 800 × 600 px") == true, "요청·실제 픽셀 크기 안내")
-        let minimumPlacement = WindowPlacement(requested: small, actual: larger,
-                                               advice: WindowSizeAdvice(minimum: larger.size), scale: 2)
-        check(minimumPlacement.warning?.contains("앱의 최소 크기 제한으로 선택한 영역보다 크게 배치됐습니다.") == true,
-              "확인된 최소 크기만 원인으로 안내")
-        let unexplained = WindowPlacement(requested: small, actual: larger,
-                                         advice: WindowSizeAdvice(minimum: CGSize(width: 200, height: 200)), scale: 2)
-        check(unexplained.warning?.contains("최소 크기 제한") == false, "관측값이 최소값과 다르면 원인 추정 금지")
-        let exact = WindowPlacement(requested: expected, actual: expected, advice: advice, scale: 2)
-        check(exact.warning == nil && !exact.sizeChanged, "정확히 배치되면 경고 없음")
-        let shifted = WindowPlacement(requested: expected, actual: expected.offsetBy(dx: 10, dy: 0), advice: advice, scale: 2)
-        check(shifted.warning == nil && !shifted.sizeChanged, "위치만 달라지면 빨간 경고 없음")
+        let exact = WindowPlacement(requested: expected, actual: expected, scale: 2)
+        check(!exact.sizeChanged, "정확히 배치되면 크기 차이 없음")
+        let shifted = WindowPlacement(requested: expected, actual: expected.offsetBy(dx: 10, dy: 0), scale: 2)
+        check(!shifted.sizeChanged, "위치만 달라지면 크기 차이 없음")
         let boundary = CGRect(x: 100.249, y: 200, width: 879, height: 993)
-        let rounded = WindowPlacement(requested: boundary, actual: boundary.offsetBy(dx: 0.002, dy: 0), advice: advice, scale: 2)
-        check(rounded.warning == nil, "반올림 경계의 미세 위치 차이로 경고하지 않음")
+        let rounded = WindowPlacement(requested: boundary, actual: boundary.offsetBy(dx: 0.002, dy: 0), scale: 2)
+        check(!rounded.sizeChanged, "반올림 경계의 위치 차이를 크기 차이로 기록하지 않음")
         for scale: CGFloat in [1, 2] {
+            let requested = CGRect(x: 100, y: 150, width: 325 / scale, height: 464 / scale)
+            let applied = CGRect(origin: requested.origin, size: CGSize(width: 340 / scale, height: requested.height))
+            let intelliJ = WindowPlacement(requested: requested, actual: applied, scale: scale)
+            check(!intelliJ.sizeChanged && intelliJ.frame == applied,
+                  "IntelliJ 사례의 15px 차이는 거부 크기로 기록하지 않음")
             let request = CGRect(x: 100, y: 150, width: 1280 / scale, height: 1333 / scale)
-            for (widthDelta, heightDelta, shouldWarn): (CGFloat, CGFloat, Bool) in [
-                (0, -1, false), (-4, 4, false), (4, -4, false),
-                (4.01, 0, true), (0, -4.01, true), (-5, 0, true), (0, 5, true)
+            for (widthDelta, heightDelta, shouldRecordDifference): (CGFloat, CGFloat, Bool) in [
+                (0, -1, false), (-24, 24, false), (24, -24, false),
+                (24.01, 0, true), (0, -24.01, true), (-25, 0, true), (0, 25, true)
             ] {
                 let actual = CGRect(origin: request.origin,
                                     size: CGSize(width: request.width + widthDelta / scale,
                                                  height: request.height + heightDelta / scale))
-                let placement = WindowPlacement(requested: request, actual: actual, advice: WindowSizeAdvice(), scale: scale)
-                check(placement.sizeChanged == shouldWarn && (placement.warning != nil) == shouldWarn,
-                      "\(scale)배 화면 가로 \(widthDelta)px·세로 \(heightDelta)px 차이 경고 경계")
+                let placement = WindowPlacement(requested: request, actual: actual, scale: scale)
+                check(placement.sizeChanged == shouldRecordDifference,
+                      "\(scale)배 화면 가로 \(widthDelta)px·세로 \(heightDelta)px 차이 크기 차이 판정 경계")
                 check(placement.frame == actual, "허용 오차 판정에서도 실제 배치 유지")
             }
         }
         check(shifted.frame == expected.offsetBy(dx: 10, dy: 0), "위치 차이가 있어도 실제 배치 유지")
-        let reduced = WindowPlacement(requested: larger, actual: small, advice: advice, scale: 2)
-        check(reduced.warning?.contains("최소 크기 제한") == false, "작아진 결과를 최소 크기 제한으로 오인하지 않음")
         check(WindowSizeAdvice.matches(CGSize(width: 100, height: 200), CGSize(width: 100.1, height: 200), scale: 2),
               "실패 기록의 동일 렌더링 픽셀 비교")
         check(!WindowSizeAdvice.matches(CGSize(width: 100, height: 200), CGSize(width: 100.5, height: 200), scale: 2),
@@ -160,6 +153,8 @@ enum SelfCheck {
         check(diagnostics.keyboardEvents.count == 8 && diagnostics.keyboardEvents.first?.hasSuffix("검사 2") == true,
               "단축키 진단 기록을 최근 8개로 제한")
         check(diagnostics.summary.contains("검사 9") && !diagnostics.summary.contains("검사 0"), "단축키 진단 도움말")
+        diagnostics.recordPlacement(requested: small, actual: larger, scale: 2)
+        check(diagnostics.summary.contains("요청 68 × 92 px · 실제 800 × 600 px"), "요청·실제 픽셀 크기 진단")
         diagnostics.recordPlacement(requested: boundary, actual: boundary.offsetBy(dx: 0.002, dy: 0), scale: 2)
         check(diagnostics.lastPlacement.contains("100.2490") && diagnostics.lastPlacement.contains("100.2510"), "요청·실제 원본 위치 진단")
         check(diagnostics.lastPlacement.contains("0.0040"), "배율 반영 위치 차이 진단")
@@ -267,6 +262,11 @@ enum SelfCheck {
         check(preferences.values["unrelated"] as? String == "유지" && preferences.values[ShortcutSettings.storageKey] == nil,
               "초기화는 단축키 설정만 제거")
         check(settings.binding(for: .leftHalf) == WindowAction.leftHalf.defaultBinding, "기본키 복원")
+        let defaultDrag = settings.binding(for: .drawRegion)
+        check(defaultDrag.matchesDrag(flags: controlOption | CGEventFlags.maskCommand.rawValue),
+              "자유 드래그 기본값은 Control + Option + Command")
+        check(!defaultDrag.matchesDrag(flags: CGEventFlags([.maskCommand, .maskShift]).rawValue),
+              "이전 기본 조합은 사용자 설정에서만 동작")
         preferences.values[ShortcutSettings.storageKey] = Data("{\"version\":999,\"overrides\":{}}".utf8)
         check(ShortcutSettings(defaults: preferences).loadWarning != nil, "지원하지 않는 설정 버전 안내")
 

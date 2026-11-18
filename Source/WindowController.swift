@@ -41,28 +41,14 @@ struct WindowTarget {
 struct WindowPlacement {
     let frame: CGRect
     let sizeChanged: Bool
-    let warning: String?
 
-    init(requested: CGRect, actual: CGRect, advice: WindowSizeAdvice, scale: CGFloat) {
+    init(requested: CGRect, actual: CGRect, scale: CGFloat) {
         frame = actual
-        // 창 시스템의 반올림을 고려해 가로·세로 각각 4 렌더링 px 이내 차이는 허용합니다.
+        // 실패 크기 기록에는 각 축의 24 렌더링 px 이내 차이를 무시합니다.
         let differences = [actual.width - requested.width, actual.height - requested.height]
         sizeChanged = !scale.isFinite || scale <= 0 || differences.contains {
-            !$0.isFinite || abs($0 * scale) > 4 + 0.000001
+            !$0.isFinite || abs($0 * scale) > 24 + 0.000001
         }
-        var messages: [String] = []
-        if sizeChanged {
-            let minimumExplainsChange = advice.minimum.map {
-                (requested.width < $0.width || requested.height < $0.height) &&
-                    WindowSizeAdvice.matches(actual.size, CGSize(width: max(requested.width, $0.width),
-                                                                 height: max(requested.height, $0.height)), scale: scale)
-            } ?? false
-            messages.append(minimumExplainsChange
-                ? "앱의 최소 크기 제한으로 선택한 영역보다 크게 배치됐습니다."
-                : "앱의 크기 제한으로 선택한 영역과 다르게 배치됐습니다.")
-        }
-        warning = messages.isEmpty ? nil : messages.joined(separator: " ") +
-            "\n요청 \(SelectionGeometry.pixelSizeLabel(requested.size, scale: scale)) · 실제 \(SelectionGeometry.pixelSizeLabel(actual.size, scale: scale))"
     }
 }
 
@@ -256,8 +242,9 @@ enum WindowController {
         guard let actual = frame(of: target.element) else {
             throw WindowFailure(message: "변경 결과를 확인할 수 없습니다. 현재 창 상태를 확인해 주세요.")
         }
-        let result = WindowPlacement(requested: rect, actual: actual, advice: target.sizeAdvice, scale: scale)
-        if result.warning != nil || (errors.resize == .success && errors.align == .success) { return result }
+        let result = WindowPlacement(requested: rect, actual: actual, scale: scale)
+        let requestSucceeded = errors.resize == .success && errors.align == .success
+        if requestSucceeded || actual != target.originalFrame { return result }
         throw WindowFailure(message: "창 변경 요청 중 오류가 발생했습니다. 현재 창 상태를 확인해 주세요.")
     }
 }

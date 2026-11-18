@@ -51,7 +51,7 @@ post = bind(cg, 'CGEventPost', [c.c_uint32, P], None)
 window_list = bind(cg, 'CGWindowListCopyWindowInfo', [c.c_uint32, c.c_uint32], P)
 main_display = bind(cg, 'CGMainDisplayID', [], c.c_uint32)
 display_bounds = bind(cg, 'CGDisplayBounds', [c.c_uint32], Rect)
-MODIFIERS = (1 << 20) | (1 << 17)
+MODIFIERS = (1 << 18) | (1 << 19) | (1 << 20)
 
 
 def get(element, name):
@@ -281,15 +281,11 @@ def run(candidate_path, fixture_path):
         assert f'{round(140 * scale)} × {round(110 * scale)} px' in initial_info['value'], initial_info
         assert '놓은 뒤 지원 여부를 확인합니다' in initial_info['value'], initial_info
         mouse(2, last_point)
-        wait_for(lambda: '선택한 영역과 다르게 배치됐습니다.' in status(candidate.pid), '크기 제한 안내가 없습니다.')
-        outcome = settled_preview(candidate.pid)
+        sizes = f'요청 {round(140 * scale)} × {round(110 * scale)} px · 실제 {round(799 * scale)} × {round(300 * scale)} px'
+        wait_for(lambda: sizes in status(candidate.pid), '요청·실제 크기 진단이 없습니다.')
         applied = frame(fixture.pid)
-        assert '경고: 앱의 크기 제한으로' in outcome['value'], outcome
-        assert '복원' not in outcome['value'], outcome
         assert applied and same_frame(applied, (start.x, start.y, 799, 300)), applied
-        assert same_frame(outcome['frame'], applied), (outcome, applied)
-        assert f'실제 {round(799 * scale)} × {round(300 * scale)} px' in outcome['value'], outcome
-        assert visible_overlay(candidate.pid), '경고가 화면에 표시되지 않았습니다.'
+        assert not visible_overlay(candidate.pid), '배치 성공 후 빨간 팝업이 표시됐습니다.'
         assert not same_frame(applied, original_fixture_frame), '작은 영역 적용 후 이전 배치로 돌아갔습니다.'
 
         hold_drag(start, last_point, fixture.pid)
@@ -334,12 +330,9 @@ def run(candidate_path, fixture_path):
         edge_info = settled_preview(candidate.pid)
         assert same_frame(edge_info['frame'], (start.x, start.y, 90, 90)), edge_info
         mouse(2, last_point)
-        wait_for(lambda: '선택한 영역과 다르게 배치됐습니다.' in status(candidate.pid), '가장자리 크기 제한 안내가 없습니다.')
-        edge_result = settled_preview(candidate.pid)
-        assert '복원' not in edge_result['value'], edge_result
-        assert same_frame(edge_result['frame'], frame(fixture.pid)), (edge_result, frame(fixture.pid))
-        assert not same_frame(frame(fixture.pid), before), '가장자리 이동이 이전 배치로 복원됐습니다.'
-        wait_for(lambda: not visible_overlay(candidate.pid), '실패 안내가 자동으로 닫히지 않았습니다.')
+        wait_for(lambda: '배치 완료' in status(candidate.pid) and not same_frame(frame(fixture.pid), before),
+                 '가장자리 이동이 완료되지 않았습니다.')
+        assert not visible_overlay(candidate.pid), '가장자리 배치 성공 후 팝업이 표시됐습니다.'
         before_switch = fixture_windows(fixture.pid)
         assert len(before_switch) == 2, before_switch
         start = Point(bounds.origin.x + 60, bounds.origin.y + 60)
@@ -356,7 +349,7 @@ def run(candidate_path, fixture_path):
         maximum = re.search(r'입력 최대 ([\d.]+) ms', result)
         assert maximum and float(maximum[1]) < 50, result
         print(json.dumps({'result': 'PASS', 'checks': ['첫 드래그 표시', '작은 영역 좌표 보존',
-                '미확인 크기 안내', '크기 제한 경고', '요청·실제 크기 안내', '이동 결과 유지', '이전 거부 크기 드래그 중 경고',
+                '미확인 크기 안내', '크기 차이 팝업 없음', '요청·실제 크기 진단', '이동 결과 유지', '이전 거부 크기 드래그 중 경고',
                 '크기 자동 보정 없음', '오류 타이머와 새 드래그 분리',
                 'Esc 취소', '네 방향 자유 그리기와 실제 배치 일치', '가장자리 보정 없음', '오류 안내 자동 닫기',
                 '같은 앱의 다른 창 전환 시 취소', '취소 후 두 창 배치 유지', '입력 시간 초과 없음'],

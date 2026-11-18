@@ -36,7 +36,7 @@ enum WindowAction: String, CaseIterable, Codable {
     var defaultBinding: ShortcutBinding {
         let controlOption = CGEventFlags([.maskControl, .maskAlternate]).rawValue
         switch self {
-        case .drawRegion: return ShortcutBinding(keyCode: nil, modifiers: CGEventFlags([.maskCommand, .maskShift]).rawValue)
+        case .drawRegion: return ShortcutBinding(keyCode: nil, modifiers: CGEventFlags([.maskControl, .maskAlternate, .maskCommand]).rawValue)
         case .leftHalf: return ShortcutBinding(keyCode: 123, modifiers: controlOption)
         case .rightHalf: return ShortcutBinding(keyCode: 124, modifiers: controlOption)
         case .topHalf: return ShortcutBinding(keyCode: 126, modifiers: controlOption)

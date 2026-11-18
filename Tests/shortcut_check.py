@@ -141,6 +141,7 @@ def run(candidate_path, fixture_path):
         assert title(app, '자유 영역 그리기 단축키') == '⌃⌥⇧ + 왼쪽 드래그'
         press(app, '전체 기본값 복원')
         assert title(app, '왼쪽 절반 단축키') == '⌃⌥←'
+        assert title(app, '자유 영역 그리기 단축키') == '⌃⌥⌘ + 왼쪽 드래그'
         assert title(app, '가운데 절반 단축키') == '단축키 입력'
         for label, code in [('가운데 절반 단축키', 4), ('거의 최대화 단축키', 3)]:
             press(app, label)

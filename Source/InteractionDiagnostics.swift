@@ -74,7 +74,8 @@ struct InteractionDiagnostics {
     }
 
     mutating func recordPlacement(requested: CGRect, actual: CGRect, scale: CGFloat) {
-        lastPlacement = String(format: "논리 좌표 요청 (%.4f, %.4f, %.4f, %.4f) · 실제 (%.4f, %.4f, %.4f, %.4f) · 위치 차이 (%.4f, %.4f) px",
+        let sizes = "요청 \(SelectionGeometry.pixelSizeLabel(requested.size, scale: scale)) · 실제 \(SelectionGeometry.pixelSizeLabel(actual.size, scale: scale))"
+        lastPlacement = sizes + "\n" + String(format: "논리 좌표 요청 (%.4f, %.4f, %.4f, %.4f) · 실제 (%.4f, %.4f, %.4f, %.4f) · 위치 차이 (%.4f, %.4f) px",
                                requested.minX, requested.minY, requested.width, requested.height,
                                actual.minX, actual.minY, actual.width, actual.height,
                                (actual.minX - requested.minX) * scale, (actual.minY - requested.minY) * scale)
