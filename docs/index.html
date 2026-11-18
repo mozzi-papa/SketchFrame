@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f6f8fc">
+<meta name="description" content="드래그로 원하는 영역을 그리거나 단축키로 창을 배치하는 Mac 메뉴 막대 앱입니다.">
+<title>SketchFrame — 창을 놓을 자리를 그리세요</title>
+<link rel="icon" href="design/app-icon.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:light;--ink:#151f32;--muted:#495871;--blue:#1657c7;--line:#d9e2f0;--paper:#f6f8fc;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);line-height:1.6;word-break:keep-all}a{color:var(--blue);text-underline-offset:4px}button{font:inherit;cursor:pointer}a:focus-visible,button:focus-visible,.desktop:focus-visible{outline:3px solid #3678ec;outline-offset:4px}[hidden]{display:none!important}
+.wrap{width:min(1120px,calc(100% - 48px));margin:auto}.top{border-bottom:1px solid var(--line)}.top .wrap,footer .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:15px 0}.brand{display:flex;align-items:center;gap:7px;font-weight:800;text-decoration:none;color:var(--ink);letter-spacing:-.035em}.brand img{display:block}.top nav{display:flex;gap:20px}.top nav a{font-size:.9rem;font-weight:650;text-decoration:none}
+.hero{display:grid;grid-template-columns:.86fr 1.14fr;gap:clamp(26px,5vw,70px);align-items:center;padding:clamp(52px,9vw,104px) 0 68px}.platform,.label{font-size:.79rem;font-weight:800;letter-spacing:.09em;color:var(--blue)}h1,h2,h3,p{margin:0}h1{font-size:clamp(2.55rem,5.2vw,4.5rem);line-height:1.13;letter-spacing:-.075em;margin:10px 0 21px}h1 span{color:var(--blue)}.intro{font-size:clamp(1rem,1.45vw,1.16rem);max-width:29em;color:var(--muted)}.actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:26px 0 12px}.button{display:inline-flex;align-items:center;gap:10px;text-decoration:none;background:var(--blue);color:white;padding:11px 17px;border-radius:11px;font-weight:750}.button:hover{background:#1246a3}.meta,.note{color:var(--muted);font-size:.87rem}
+.demo{margin:0;min-width:0}.desktop{isolation:isolate;position:relative;aspect-ratio:1.52;overflow:hidden;border-radius:22px;background:radial-gradient(ellipse at 10% 100%,#195ac3 2%,transparent 60%),radial-gradient(ellipse at 90% 12%,#4468b3,transparent 68%),#122b53;box-shadow:0 18px 40px #1a37602b;touch-action:none;user-select:none;cursor:crosshair;color:#fff}.desktop::before{content:"";position:absolute;inset:0;background:linear-gradient(#ffffff13 1px,transparent 1px),linear-gradient(90deg,#ffffff13 1px,transparent 1px);background-size:24px 24px;pointer-events:none}.menubar{position:absolute;inset:0 0 auto;padding:7px 14px;background:#0d204b66;font-size:.68rem;font-weight:700;pointer-events:none}.window,.selection{position:absolute;pointer-events:none}.window{overflow:hidden;border:1px solid #fff9;border-radius:11px;background:#f5f8ff;box-shadow:0 10px 24px #07193666;color:#425576}.window-bar{padding:8px 9px;display:flex;align-items:center;gap:4px;background:#e5edf9}.window-bar i{width:7px;height:7px;border-radius:50%;background:#ff655e}.window-bar i:nth-child(2){background:#dda425}.window-bar i:nth-child(3){background:#2da965}.window-bar span{font-size:.67rem;font-weight:650;margin-left:5px;overflow:hidden;white-space:nowrap}.window-content{padding:12%;display:grid;gap:8px}.window-content i{height:6px;background:#dbe5f3;border-radius:7px}.window-content i:nth-child(2){width:75%}.window-content i:nth-child(3){width:48%}.window-main{left:7%;top:18%;width:42%;height:63%}.window-back{left:56%;top:14%;width:38%;height:62%;opacity:.42}.selection{left:51%;top:23%;width:43%;height:65%;border:2px solid #9bdbff;background:#5cbcff38;border-radius:6px}.selection span{position:absolute;top:0;left:0;background:#102e55;color:#eefaff;padding:3px 6px;font:700 .64rem system-ui;white-space:nowrap}.demo figcaption{padding-top:13px}.demo-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.demo-controls button{background:white;color:#284164;border:1px solid #c9d6e9;border-radius:7px;padding:6px 10px;font-size:.78rem;font-weight:700}.demo-controls button:hover{background:#e8f0ff}
+.section{border-top:1px solid var(--line);padding:52px 0}.section h2{font-size:clamp(1.55rem,3vw,2.4rem);letter-spacing:-.055em;margin:4px 0 18px}.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.features article,.install-card{background:white;border:1px solid var(--line);border-radius:15px;padding:21px}.features h3,.install-card h3{font-size:1.04rem;margin-bottom:7px}.features p,.install-card p,li{color:var(--muted);font-size:.94rem}kbd{font:inherit;font-size:.9em;border:1px solid #c9d6e9;background:#eef4ff;color:#254570;padding:1px 5px;border-radius:5px;white-space:nowrap}.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.install-card ol{margin:7px 0 0;padding-left:22px}.install-card li+li{margin-top:5px}pre{overflow:auto;background:#13223e;color:#eaf2ff;border-radius:8px;padding:12px;font-size:.88rem}footer{border-top:1px solid var(--line)}footer a{font-weight:700;font-size:.9rem}
+@media(max-width:800px){.hero{grid-template-columns:1fr;padding:42px 0 42px}.features{grid-template-columns:1fr}.install-grid{grid-template-columns:1fr}}
+@media(max-width:420px){.wrap{width:calc(100% - 32px)}.top nav{gap:11px}.top nav a{font-size:.81rem}.desktop{border-radius:13px}.section{padding:36px 0}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#top"><img src="design/app-icon.svg" width="36" height="36" alt="">SketchFrame</a>
+  <nav aria-label="페이지 메뉴"><a href="#features">기능</a><a href="#install">설치</a><a href="https://github.com/mozzi-papa/SketchFrame">GitHub</a></nav>
+</div></header>
+<main id="top">
+  <section class="wrap hero" aria-labelledby="hero-title">
+    <div><p class="platform">macOS 메뉴 막대 앱</p>
+      <h1 id="hero-title">창을 놓을 자리를<br><span>그리세요.</span></h1>
+      <p class="intro">원하는 위치와 크기를 마우스로 그리세요. 자주 쓰는 배치는 단축키 한 번으로 맞출 수 있습니다.</p>
+      <div class="actions"><a class="button" href="https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.4/sketchframe-0.1.4-arm64.zip">Mac용 다운로드 <span aria-hidden="true">↓</span></a><a href="#install">설치 방법</a></div>
+      <p class="meta">Apple Silicon · macOS 13 이상 · v0.1.4</p>
+    </div>
+    <figure class="demo">
+      <div class="desktop" id="desktop" tabindex="0" role="group" aria-label="창 배치 체험" aria-describedby="demo-help">
+        <div class="menubar" aria-hidden="true">SketchFrame</div>
+        <div class="window window-back" aria-hidden="true"><div class="window-bar"><i></i><i></i><i></i><span>자료</span></div><div class="window-content"><i></i><i></i><i></i></div></div>
+        <div class="window window-main" id="demo-window" aria-hidden="true"><div class="window-bar"><i></i><i></i><i></i><span>작업 창</span></div><div class="window-content"><i></i><i></i><i></i></div></div>
+        <div class="selection" id="selection" aria-hidden="true"><span id="size">배치 영역</span></div>
+      </div>
+      <figcaption>
+        <p class="note" id="demo-help">브라우저 체험 · 화면 안에서 드래그하거나 아래 버튼으로 예시 창을 배치해 보세요.</p>
+        <div class="demo-controls"><button type="button" data-layout="left">왼쪽 절반</button><button type="button" data-layout="right">오른쪽 절반</button><button type="button" data-layout="reset">처음 상태</button></div>
+        <p class="note" id="demo-status" role="status">드래그한 영역에 작업 창이 배치됩니다.</p>
+      </figcaption>
+    </figure>
+  </section>
+  <section id="features" class="section wrap" aria-labelledby="features-title">
+    <p class="label">창 배치</p><h2 id="features-title">작업에 맞춰 창을 정리하세요.</h2>
+    <div class="features">
+      <article><h3>자유 영역 그리기</h3><p>창을 활성화하고 <kbd>⌘ ⇧</kbd>를 누른 채 드래그하세요. 미리보기로 위치와 크기를 확인한 뒤 마우스를 놓으면 적용됩니다.</p></article>
+      <article><h3>단축키로 빠른 배치</h3><p><kbd>⌃ ⌥ ←</kbd>와 <kbd>⌃ ⌥ →</kbd>로 좌우 절반을 채우세요. 모서리, 최대화, 복원 등 18가지 배치를 설정할 수 있습니다.</p></article>
+      <article><h3>옆 모니터까지 이동</h3><p>창을 한쪽 절반에 배치한 다음 같은 단축키를 다시 누르세요. 그 방향에 모니터가 있으면 가까운 쪽 절반으로 이동합니다.</p></article>
+    </div>
+  </section>
+  <section id="install" class="section wrap" aria-labelledby="install-title">
+    <p class="label">설치</p><h2 id="install-title">설치 후 메뉴 막대에서 시작하세요.</h2>
+    <div class="install-grid">
+      <article class="install-card"><h3>ZIP으로 설치</h3><ol><li><a href="https://github.com/mozzi-papa/SketchFrame/releases/download/v0.1.4/sketchframe-0.1.4-arm64.zip">ZIP</a>을 내려받아 압축을 풉니다.</li><li>SketchFrame을 응용 프로그램 폴더로 옮기고 실행합니다.</li><li>시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 SketchFrame을 허용합니다.</li></ol></article>
+      <article class="install-card"><h3>Homebrew로 설치</h3><pre><code>brew install --cask mozzi-papa/tap/sketchframe</code></pre><p>설치 후 앱을 실행하고 손쉬운 사용 권한을 허용하세요.</p></article>
+    </div>
+    <p class="note" style="margin-top:14px">현재 배포본에는 Apple Developer ID 서명과 공증이 포함되어 있지 않아 Mac에서 실행이 차단될 수 있습니다. <a href="https://github.com/mozzi-papa/SketchFrame/releases/latest">릴리스 정보와 체크섬</a></p>
+  </section>
+</main>
+<footer><div class="wrap"><span class="meta">SketchFrame · macOS 창 배치</span><a href="https://github.com/mozzi-papa/SketchFrame#readme">사용 설명서</a></div></footer>
+<script>
+const desktop = document.querySelector('#desktop');
+const selection = document.querySelector('#selection');
+const demoWindow = document.querySelector('#demo-window');
+const size = document.querySelector('#size');
+const message = document.querySelector('#demo-status');
+let drag;
+
+function place(element, rectangle) {
+  const [left, top, width, height] = rectangle;
+  Object.assign(element.style, {left: left + '%', top: top + '%', width: width + '%', height: height + '%'});
+}
+
+function point(event) {
+  const bounds = desktop.getBoundingClientRect();
+  const percent = (value, start, span) => Math.max(0, Math.min(100, (value - start) / span * 100));
+  return [percent(event.clientX, bounds.left, bounds.width), percent(event.clientY, bounds.top, bounds.height)];
+}
+
+function rectangle(event) {
+  const [x, y] = point(event);
+  return [Math.min(x, drag.x), Math.min(y, drag.y), Math.abs(x - drag.x), Math.abs(y - drag.y)];
+}
+
+function cancelDraw() {
+  drag = undefined;
+  selection.hidden = true;
+}
+
+desktop.addEventListener('pointerdown', event => {
+  if (drag || !event.isPrimary || event.button !== 0) return;
+  const [x, y] = point(event);
+  desktop.focus({preventScroll: true});
+  desktop.setPointerCapture(event.pointerId);
+  drag = {x, y, id: event.pointerId};
+  selection.hidden = true;
+});
+
+desktop.addEventListener('pointermove', event => {
+  if (drag?.id !== event.pointerId) return;
+  const region = rectangle(event);
+  place(selection, region);
+  selection.hidden = false;
+  size.textContent = Math.round(desktop.clientWidth * region[2] / 100) + ' × ' +
+    Math.round(desktop.clientHeight * region[3] / 100) + ' px';
+});
+
+desktop.addEventListener('pointerup', event => {
+  if (drag?.id !== event.pointerId) return;
+  const region = rectangle(event);
+  cancelDraw();
+  if (region[2] / 100 * desktop.clientWidth < 5 || region[3] / 100 * desktop.clientHeight < 5) return;
+  place(demoWindow, region);
+  message.textContent = '그린 영역에 작업 창을 배치했습니다.';
+});
+
+for (const type of ['pointercancel', 'lostpointercapture']) {
+  desktop.addEventListener(type, event => {
+    if (drag?.id === event.pointerId) cancelDraw();
+  });
+}
+
+desktop.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !drag) return;
+  const id = drag.id;
+  cancelDraw();
+  desktop.releasePointerCapture(id);
+  message.textContent = '영역 선택을 취소했습니다.';
+});
+
+const layouts = {
+  left: [[3, 13, 46, 82], '왼쪽 절반에 작업 창을 배치했습니다.'],
+  right: [[51, 13, 46, 82], '오른쪽 절반에 작업 창을 배치했습니다.'],
+  reset: [[7, 18, 42, 63], '체험을 처음 상태로 돌렸습니다.']
+};
+
+document.querySelectorAll('[data-layout]').forEach(button => {
+  button.addEventListener('click', () => {
+    cancelDraw();
+    const [region, description] = layouts[button.dataset.layout];
+    place(demoWindow, region);
+    if (button.dataset.layout === 'reset') {
+      place(selection, [51, 23, 43, 65]);
+      size.textContent = '배치 영역';
+      selection.hidden = false;
+    }
+    message.textContent = description;
+  });
+});
+</script>
+</body>
+</html>
